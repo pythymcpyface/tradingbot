@@ -8,6 +8,7 @@ import { backtestRouter } from './routes/backtest';
 import { ordersRouter } from './routes/orders';
 import { optimisationRouter } from './routes/optimisation';
 import { glickoRouter } from './routes/glicko';
+import { tradingRouter } from './routes/trading';
 
 // Load environment variables
 config();
@@ -29,6 +30,7 @@ app.use('/api/backtest', backtestRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/optimisation', optimisationRouter);
 app.use('/api/glicko', glickoRouter);
+app.use('/api/trading', tradingRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
