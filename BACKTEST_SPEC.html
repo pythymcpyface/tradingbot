@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backtesting Specification: Glicko-2 Momentum Strategy</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.7;
+            color: #333;
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 25px;
+            background-color: #f8f9fa;
+        }
+        article {
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.07);
+        }
+        header {
+            padding: 30px 40px;
+            border-bottom: 2px solid #f1f3f5;
+            text-align: center;
+        }
+        h1, h2, h3 {
+            color: #212529;
+            font-weight: 600;
+        }
+        h1 { font-size: 2.6em; margin-bottom: 10px; }
+        h2 { font-size: 2em; border-bottom: 2px solid #e9ecef; padding-bottom: 15px; margin-top: 40px; }
+        h3 { font-size: 1.4em; color: #495057; margin-top: 30px; }
+        section { padding: 20px 40px; }
+        .note {
+            background-color: #e7f5ff;
+            border-left: 5px solid #1c7ed6;
+            padding: 20px;
+            margin: 2em 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .note strong { color: #1971c2; }
+        .signal-entry { color: #28a745; font-weight: bold; }
+        .signal-exit { color: #dc3545; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1.5em; }
+        th, td { border: 1px solid #ddd; padding: 14px; text-align: left; }
+        th { background-color: #f7f7f7; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 1em; }
+    </style>
+</head>
+<body>
+
+    <article id="backtesting-specification">
+        <header>
+            <h1>Backtesting Specification</h1>
+            <p><strong>Strategy:</strong> Glicko-2 Momentum Breakout</p>
+        </header>
+
+        <section id="data-requirements">
+            <h2>1.0 Data Requirements</h2>
+            <ul>
+                <li><strong>Asset Universe:</strong> Top 20 cryptocurrencies by market cap (as of the start of the test period) paired against USDT.</li>
+                <li><strong>Timeframe:</strong> 1-Hour (1H) klines.</li>
+                <li><strong>Historical Period:</strong> A minimum of **4 years** of data is required to cover multiple market cycles.
+                    <ul>
+                        <li><strong>Suggested Period:</strong> August 8, 2021 - August 7, 2025.</li>
+                    </ul>
+                </li>
+                <li><strong>Required Fields:</strong> For each 1H kline, the following data points are mandatory: Timestamp (Open Time), Open, High, Low, Close, Volume, Taker Buy Base Asset Volume, Taker Sell Base Asset Volume.</li>
+            </ul>
+        </section>
+
+        <section id="signal-logic">
+            <h2>2.0 Signal Generation Logic</h2>
+            <p>Signals are generated based on an asset's Glicko-2 rating **z-score**, which measures how many standard deviations the current rating is from its historical mean. This identifies statistically significant momentum shifts.</p>
+
+            <h3>2.1 Rating Baseline Calculation</h3>
+            <p>For each asset, two metrics must be continuously calculated using its historical 1-hour Glicko-2 ratings:</p>
+            <ul>
+                <li><strong>Rating Moving Average (Rating MA):</strong> The moving average of the asset's rating (μ) over a specified period (e.g., 200 hours).</li>
+                <li><strong>Rating Standard Deviation (Rating StDev):</strong> The moving standard deviation of the asset's rating (μ) over the same period.</li>
+            </ul>
+
+            <h3>2.2 Entry Signal</h3>
+            <p>A <span class="signal-entry">LONG ENTRY</span> signal is triggered when the asset's rating z-score exceeds a positive threshold.</p>
+            <blockquote>
+                <strong>Condition:</strong> The asset's current rating z-score is **greater than** the positive threshold 'N' (e.g., +3.0).
+                <br>
+                <em>z-score = (Current Rating - Rating MA) / Rating StDev</em>
+            </blockquote>
+
+            <h3>2.3 Exit Signals</h3>
+            <p>An open position is closed if **any** of the following three exit signals are triggered:</p>
+            <ol>
+                <li>
+                    <strong><span class="signal-exit">Rating Reversion:</span></strong> This signal indicates a significant negative momentum shift.
+                    <blockquote>
+                        <strong>Condition:</strong> The asset's current rating z-score falls **below** the negative threshold '-N' (e.g., -3.0).
+                    </blockquote>
+                </li>
+                <li>
+                    <strong><span class="signal-exit">Take-Profit:</span></strong> This signal locks in gains at a predefined target.
+                    <blockquote>
+                        <strong>Condition:</strong> The current market price reaches the target price calculated at entry: <br>
+                        <em>Entry Price * (1 + profit_percent)</em>
+                    </blockquote>
+                </li>
+                <li>
+                    <strong><span class="signal-exit">Stop-Loss:</span></strong> This signal prevents excessive losses and enforces the risk limit per trade.
+                    <blockquote>
+                        <strong>Condition:</strong> The current market price reaches the stop price calculated at entry: <br>
+                        <em>Entry Price * (1 - stop_loss_percent)</em>
+                    </blockquote>
+                </li>
+            </ol>
+        </section>
+
+        <section id="testing-methodology">
+            <h2>3.0 Testing Methodology: Windowed Backtesting</h2>
+            <p>To ensure the strategy is robust and not overfit to a specific market period, a **windowed (or walk-forward) backtesting** approach must be implemented. This method tests the strategy on sequential "chunks" of historical data.</p>
+            
+            <h3>3.1 Process Definition</h3>
+            <ol>
+                <li><strong>Define Window Size:</strong> A fixed period for each individual backtest run. A common size is 12 months.</li>
+                <li><strong>Define Step Size:</strong> The amount of time to move the window forward for the next test. This must be **half of the Window Size** (e.g., 6 months for a 12-month window). This creates overlapping periods, which helps to verify parameter stability.</li>
+                <li><strong>Iterate and Test:</strong> The backtest is run on the first window of data. Then, the window is moved forward by the step size, and the test is run again. This process is repeated until the entire 4-year dataset has been covered.</li>
+            </ol>
+
+            <h3>3.2 Example Walk-Forward Execution</h3>
+            <p>Assuming a 12-month window and a 6-month step size:</p>
+            <ul>
+                <li><strong>Run 1:</strong> Test on data from Jan 2022 - Dec 2022.</li>
+                <li><strong>Run 2:</strong> Test on data from Jul 2022 - Jun 2023.</li>
+                <li><strong>Run 3:</strong> Test on data from Jan 2023 - Dec 2023.</li>
+                <li><strong>Run 4:</strong> Test on data from Jul 2023 - Jun 2024.</li>
+                <li>...and so on.</li>
+            </ul>
+            <div class="note">
+                <strong>Purpose:</strong> This methodology rigorously tests if the optimal parameters found in one period (e.g., 2022) still perform well in a subsequent, different market environment (e.g., 2023). Consistent performance across all windows indicates a robust strategy.
+            </div>
+        </section>
+
+        <section id="simulation-and-metrics">
+            <h2>4.0 Simulation Logic & Performance Metrics</h2>
+            <p>The core simulation engine must account for real-world trading frictions, including transaction fees (0.1% per trade) and slippage. The final report for each backtest window must include the following key performance metrics for a comprehensive analysis.</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Metric</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td rowspan="3"><strong>Return Analysis</strong></td>
+                        <td>Total Return %</td>
+                        <td>The total percentage gain or loss of the portfolio over the entire period.</td>
+                    </tr>
+                    <tr>
+                        <td>Annualized Return %</td>
+                        <td>The geometric average amount of money earned by the portfolio each year.</td>
+                    </tr>
+                    <tr>
+                        <td>Benchmark Return %</td>
+                        <td>The total return of a "Buy and Hold" strategy on a benchmark asset (e.g., BTC) over the same period.</td>
+                    </tr>
+                    <tr>
+                        <td rowspan="3"><strong>Risk-Adjusted Return</strong></td>
+                        <td>Sharpe Ratio</td>
+                        <td>Measures return per unit of total risk (volatility). A value > 1.0 is considered good.</td>
+                    </tr>
+                    <tr>
+                        <td>Sortino Ratio</td>
+                        <td>Similar to Sharpe, but only penalizes for downside volatility. A value > 1.5 is considered good.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Alpha</strong></td>
+                        <td>Measures the strategy's excess return relative to the benchmark's return. A positive Alpha indicates the strategy outperformed the market on a risk-adjusted basis.</td>
+                    </tr>
+                    <tr>
+                        <td rowspan="2"><strong>Risk Analysis</strong></td>
+                        <td>Max Drawdown %</td>
+                        <td>The largest peak-to-trough drop in portfolio equity, representing the worst-case loss.</td>
+                    </tr>
+                    <tr>
+                        <td>Annualized Volatility %</td>
+                        <td>The standard deviation of the portfolio's returns, annualized. A measure of how much the portfolio fluctuates.</td>
+                    </tr>
+                    <tr>
+                        <td rowspan="4"><strong>Trade Analysis</strong></td>
+                        <td>Total Trades</td>
+                        <td>The total count of all executed trades.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Win Ratio %</strong></td>
+                        <td>The percentage of trades that were closed with a profit.</td>
+                    </tr>
+                    <tr>
+                        <td>Profit Factor</td>
+                        <td>The ratio of gross profits to gross losses. A value > 1.5 is considered good.</td>
+                    </tr>
+                     <tr>
+                        <td>Average Trade Duration</td>
+                        <td>The average time a position was held, indicating the strategy's typical holding period.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+    </article>
+
+</body>
+</html>

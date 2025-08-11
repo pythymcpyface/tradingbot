@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glicko-2 Crypto Power Rank: Hybrid Model Specification</title>
+    <style>
+        /* Basic styling for readability */
+        body { font-family: sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+        header, section, footer { margin-bottom: 2em; }
+        h1, h2, h3 { color: #111; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        code { background-color: #eee; padding: 2px 4px; border-radius: 4px; }
+        .formula { display: block; text-align: center; margin: 1em 0; font-style: italic; }
+    </style>
+</head>
+<body>
+
+    <!-- 
+        This document specifies the application of the Glicko-2 rating system 
+        to cryptocurrency markets using a hybrid model.
+        It is structured semantically for machine readability.
+    -->
+    <article id="glicko2-crypto-spec">
+        <header>
+            <h1>Glicko-2 Crypto Power Rank: Hybrid Model Specification</h1>
+            <p><strong>Version:</strong> 1.0</p>
+            <p><strong>Model:</strong> Hybrid Price/Volume Glicko-2</p>
+            <p><strong>Document Purpose:</strong> This document provides a definitive technical specification for implementing the Glicko-2 rating system to create a dynamic power ranking for cryptocurrencies. It adapts the standard Glicko-2 algorithm by using a hybrid performance score based on both price action and taker volume data.</p>
+        </header>
+
+        <section id="system-overview">
+            <h2>1.0 System Overview &amp; Core Concepts</h2>
+            <p>This system assesses the relative strength of cryptocurrencies by treating their market performance as a series of skill-based "games." It uses the Glicko-2 algorithm to account for performance, uncertainty, and consistency, providing a more nuanced ranking than simple price change alone.</p>
+            <ul>
+                <li><strong>Asset (Player):</strong> An individual cryptocurrency (e.g., BTC, ETH, SOL). Each asset has its own <strong>rating (μ)</strong>, <strong>rating deviation (φ)</strong>, and <strong>volatility (σ)</strong>.</li>
+                <li><strong>Benchmark Opponent:</strong> To measure performance, each asset "plays" against a stable benchmark, typically a major stablecoin like <strong>USDT</strong>. The asset's rating is updated based on its performance relative to this stable benchmark.</li>
+                <li><strong>Rating Period:</strong> A discrete, fixed interval of time over which performance data is collected and aggregated. All calculations are performed at the conclusion of each period.
+                    <ul>
+                        <li><strong>Defined Period:</strong> 1 Hour.</li>
+                    </ul>
+                </li>
+                <li><strong>Match (Game):</strong> A single "match" consists of one asset's performance within one rating period. For example, the data from the BTC/USDT kline between 10:00 and 11:00 constitutes one match for BTC.</li>
+            </ul>
+        </section>
+
+        <section id="hybrid-score">
+            <h2>2.0 The Hybrid Performance Score (Game Outcome)</h2>
+            <p>The most critical adaptation of the Glicko-2 system is the definition of the game outcome, or score (s_j). Instead of a binary win/loss, we use a weighted score from 0 to 1 that reflects the <em>quality</em> and <em>confidence</em> of an asset's performance.</p>
+            <p>This score is calculated by analyzing the 1-hour kline data for the asset's pair against the benchmark (e.g., BTC/USDT).</p>
+            
+            <h3>Data Required from 1-Hour Kline:</h3>
+            <ul>
+                <li><code>open_price</code></li>
+                <li><code>close_price</code></li>
+                <li><code>taker_buy_base_asset_volume</code> (Aggressive buy volume)</li>
+                <li><code>taker_sell_base_asset_volume</code> (Aggressive sell volume)</li>
+            </ul>
+
+            <h3>Hybrid Score (s_j) Calculation Table:</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Price Condition (close vs open)</th>
+                        <th>Volume Condition (Taker Buy vs Taker Sell)</th>
+                        <th>Interpretation</th>
+                        <th>Assigned Score (s_j)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>High-Confidence Win</td>
+                        <td>Green (Price Up)</td>
+                        <td>Taker Buy > Taker Sell</td>
+                        <td>Decisive upward momentum confirmed by aggressive buying.</td>
+                        <td>1.0</td>
+                    </tr>
+                    <tr>
+                        <td>Low-Confidence Win</td>
+                        <td>Green (Price Up)</td>
+                        <td>Taker Sell > Taker Buy</td>
+                        <td>Upward movement occurred despite aggressive selling pressure.</td>
+                        <td>0.75</td>
+                    </tr>
+                    <tr>
+                        <td>Draw</td>
+                        <td>Unchanged</td>
+                        <td>(N/A)</td>
+                        <td>No price change; a perfect stalemate.</td>
+                        <td>0.5</td>
+                    </tr>
+                    <tr>
+                        <td>Low-Confidence Loss</td>
+                        <td>Red (Price Down)</td>
+                        <td>Taker Buy > Taker Sell</td>
+                        <td>Downward movement occurred despite aggressive buying pressure.</td>
+                        <td>0.25</td>
+                    </tr>
+                    <tr>
+                        <td>High-Confidence Loss</td>
+                        <td>Red (Price Down)</td>
+                        <td>Taker Sell > Taker Buy</td>
+                        <td>Decisive downward momentum confirmed by aggressive selling.</td>
+                        <td>0.0</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>This calculated score is the direct input for the <code>s_j</code> variable in the Glicko-2 formulas.</p>
+        </section>
+
+        <section id="calculation-procedure">
+            <h2>3.0 Calculation Procedure</h2>
+            <p>The following steps are performed for each asset at the conclusion of every 1-hour rating period.</p>
+            
+            <h3>Prerequisites:</h3>
+            <ul>
+                <li>The asset's current rating (μ), rating deviation (φ), and volatility (σ).</li>
+                <li>The benchmark opponent's (USDT) current rating (μ_j) and RD (φ_j). For simplicity, the benchmark can be held at a constant rating (e.g., μ=1500, φ=50, σ=0.06) to represent a stable opponent.</li>
+                <li>The calculated <strong>Hybrid Score (s_j)</strong> from Section 2.0.</li>
+            </ul>
+
+            <div id="step-1">
+                <h3>Step 1: Initialization &amp; Scale Conversion</h3>
+                <ul>
+                    <li><strong>For a new asset:</strong> Assign default values (μ=1500, φ=350, σ=0.06).</li>
+                    <li><strong>Convert to Glicko-2 Scale:</strong> Before calculation, convert the asset's and the opponent's ratings and RDs to the Glicko-2 scale.
+                        <span class="formula">μ' = (μ - 1500) / 173.7178</span>
+                        <span class="formula">φ' = φ / 173.7178</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div id="step-2">
+                <h3>Step 2: Compute Estimated Variance (v)</h3>
+                <p>Calculate the estimated variance of the asset's rating based on its match against the benchmark opponent.</p>
+                <span class="formula">v = ( g(φ'_j)^2 E(μ', μ'_j, g(φ'_j))(1 - E(μ', μ'_j, g(φ'_j))) )^-1</span>
+                <p>Where g(φ'_j) and E(...) are the standard Glicko-2 functions. Since there is only one match per period, the summation Σ simplifies to a single term.</p>
+            </div>
+
+            <div id="step-3">
+                <h3>Step 3: Compute Estimated Improvement (Δ)</h3>
+                <p>Calculate the estimated improvement in rating, Δ, using the <strong>Hybrid Score</strong> as the outcome s_j.</p>
+                <span class="formula">Δ = v × g(φ'_j)(s_j - E(μ', μ'_j, g(φ'_j)))</span>
+            </div>
+
+            <div id="step-4">
+                <h3>Step 4: Determine New Volatility (σ')</h3>
+                <p>Using an iterative algorithm (e.g., Illinois algorithm), find the new volatility σ' by solving for x in the equation f(x) = 0, where:</p>
+                <span class="formula">f(x) = (e^x(Δ^2 - φ'^2 - v - e^x)) / (2(φ'^2 + v + e^x)^2) - (x - ln(σ^2)) / τ^2</span>
+                <p>The new volatility is then σ' = e^(x/2). This value will naturally increase if an asset shows inconsistent performance (e.g., many "Low-Confidence" outcomes).</p>
+            </div>
+
+            <div id="step-5">
+                <h3>Step 5: Update Rating and RD</h3>
+                <p>Calculate the final updated rating (μ'') and RD (φ'') on the Glicko-2 scale.</p>
+                <span class="formula">φ'' = 1 / sqrt( (1 / (φ'^2 + σ'^2)) + (1 / v) )</span>
+                <span class="formula">μ'' = μ' + φ''^2 × g(φ'_j)(s_j - E(μ', μ'_j, g(φ'_j)))</span>
+            </div>
+            
+            <div id="step-6">
+                <h3>Step 6: Convert Back to Original Scale</h3>
+                <p>Convert the updated values back to the standard, human-readable scale.</p>
+                <ul>
+                    <li><strong>New Rating:</strong> μ_new = 173.7178 × μ'' + 1500</li>
+                    <li><strong>New RD:</strong> φ_new = 173.7178 × φ''</li>
+                </ul>
+                <p>The asset's new volatility is the σ' calculated in Step 4. These new values become the input for the next rating period.</p>
+            </div>
+        </section>
+
+        <footer id="appendix">
+            <h2>Appendix: Inactive Assets</h2>
+            <p>If an asset has no trading volume against the benchmark during a rating period (i.e., no match occurs), its rating (μ) and volatility (σ) remain unchanged. Only its rating deviation (φ) is updated to reflect the increased uncertainty due to inactivity:</p>
+            <span class="formula">φ_new = sqrt(φ^2 + σ^2)</span>
+            <p>This ensures that the rankings of illiquid or dormant assets become less certain over time, accurately reflecting their status in the market.</p>
+        </footer>
+
+    </article>
+
+</body>
+</html>

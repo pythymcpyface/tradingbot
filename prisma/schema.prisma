@@ -1,0 +1,159 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Klines {
+  id                      String   @id @default(cuid())
+  symbol                  String
+  openTime                DateTime
+  closeTime               DateTime
+  open                    Decimal  @db.Decimal(20, 8)
+  high                    Decimal  @db.Decimal(20, 8)
+  low                     Decimal  @db.Decimal(20, 8)
+  close                   Decimal  @db.Decimal(20, 8)
+  volume                  Decimal  @db.Decimal(20, 8)
+  quoteAssetVolume        Decimal  @db.Decimal(20, 8)
+  numberOfTrades          Int
+  takerBuyBaseAssetVolume Decimal  @db.Decimal(20, 8)
+  takerBuyQuoteAssetVolume Decimal @db.Decimal(20, 8)
+  ignore                  Decimal  @db.Decimal(20, 8)
+  createdAt               DateTime @default(now())
+
+  @@unique([symbol, openTime])
+  @@index([symbol, openTime])
+  @@index([openTime])
+  @@map("klines")
+}
+
+model GlickoRatings {
+  id               String   @id @default(cuid())
+  symbol           String
+  timestamp        DateTime
+  rating           Decimal  @db.Decimal(10, 4)
+  ratingDeviation  Decimal  @db.Decimal(10, 4)
+  volatility       Decimal  @db.Decimal(10, 6)
+  performanceScore Decimal  @db.Decimal(3, 2)
+  createdAt        DateTime @default(now())
+
+  @@unique([symbol, timestamp])
+  @@index([symbol, timestamp])
+  @@index([timestamp])
+  @@map("glicko_ratings")
+}
+
+model ProductionOrders {
+  id                   String   @id @default(cuid())
+  orderId              String   @unique
+  symbol               String
+  side                 OrderSide
+  type                 String
+  quantity             Decimal  @db.Decimal(20, 8)
+  price                Decimal  @db.Decimal(20, 8)
+  stopPrice            Decimal? @db.Decimal(20, 8)
+  timeInForce          String
+  status               String
+  executedQty          Decimal  @db.Decimal(20, 8)
+  cummulativeQuoteQty  Decimal  @db.Decimal(20, 8)
+  time                 DateTime
+  updateTime           DateTime
+  isWorking            Boolean
+  origQuoteOrderQty    Decimal  @db.Decimal(20, 8)
+  createdAt            DateTime @default(now())
+
+  @@index([symbol, time])
+  @@index([status])
+  @@map("production_orders")
+}
+
+model BacktestOrders {
+  id                String        @id @default(cuid())
+  runId             String
+  symbol            String
+  side              OrderSide
+  quantity          Decimal       @db.Decimal(20, 8)
+  price             Decimal       @db.Decimal(20, 8)
+  timestamp         DateTime
+  reason            ExitReason
+  profitLoss        Decimal?      @db.Decimal(20, 8)
+  profitLossPercent Decimal?      @db.Decimal(10, 4)
+  createdAt         DateTime      @default(now())
+
+  backtestRun BacktestRuns @relation(fields: [runId], references: [id])
+
+  @@index([runId])
+  @@index([symbol, timestamp])
+  @@map("backtest_orders")
+}
+
+model BacktestRuns {
+  id              String   @id @default(cuid())
+  baseAsset       String
+  quoteAsset      String
+  zScoreThreshold Decimal  @db.Decimal(5, 2)
+  movingAverages  Int
+  profitPercent   Decimal  @db.Decimal(5, 2)
+  stopLossPercent Decimal  @db.Decimal(5, 2)
+  startTime       DateTime
+  endTime         DateTime
+  windowSize      Int?     @default(12)
+  createdAt       DateTime @default(now())
+
+  orders              BacktestOrders[]
+  optimizationResults OptimizationResults[]
+
+  @@index([baseAsset, quoteAsset])
+  @@index([startTime, endTime])
+  @@map("backtest_runs")
+}
+
+model OptimizationResults {
+  id                String   @id @default(cuid())
+  runId             String
+  baseAsset         String
+  quoteAsset        String
+  zScoreThreshold   Decimal  @db.Decimal(5, 2)
+  movingAverages    Int
+  profitPercent     Decimal  @db.Decimal(5, 2)
+  stopLossPercent   Decimal  @db.Decimal(5, 2)
+  startTime         DateTime
+  endTime           DateTime
+  totalReturn       Decimal  @db.Decimal(10, 4)
+  annualizedReturn  Decimal  @db.Decimal(10, 4)
+  sharpeRatio       Decimal  @db.Decimal(10, 4)
+  sortinoRatio      Decimal  @db.Decimal(10, 4)
+  alpha             Decimal  @db.Decimal(10, 4)
+  maxDrawdown       Decimal  @db.Decimal(10, 4)
+  winRatio          Decimal  @db.Decimal(5, 2)
+  totalTrades       Int
+  profitFactor      Decimal  @db.Decimal(10, 4)
+  avgTradeDuration  Decimal  @db.Decimal(10, 2) // in hours
+  createdAt         DateTime @default(now())
+
+  backtestRun BacktestRuns @relation(fields: [runId], references: [id])
+
+  @@unique([runId])
+  @@index([baseAsset, quoteAsset])
+  @@index([totalReturn])
+  @@index([sharpeRatio])
+  @@map("optimization_results")
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum ExitReason {
+  ENTRY
+  EXIT_ZSCORE
+  EXIT_PROFIT
+  EXIT_STOP
+}
