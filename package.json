@@ -11,7 +11,16 @@
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "typecheck": "tsc --noEmit",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "setup": "./scripts/setup-database.sh",
+    "db:migrate": "npx ts-node scripts/migrate-database.ts",
+    "db:calculate-ratings": "npx ts-node scripts/calculate-initial-ratings.ts",
+    "db:reset": "npx prisma migrate reset && npm run db:migrate && npm run db:calculate-ratings",
+    "prisma:generate": "npx prisma generate",
+    "prisma:studio": "npx prisma studio",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
   "keywords": ["trading", "cryptocurrency", "glicko-2", "backtesting", "binance"],
   "author": "Trading Bot System",
@@ -24,7 +33,8 @@
     "dotenv": "^16.3.1",
     "binance-api-node": "^0.12.4",
     "ws": "^8.14.2",
-    "@types/ws": "^8.5.10"
+    "@types/ws": "^8.5.10",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.4",
@@ -39,6 +49,9 @@
     "@typescript-eslint/parser": "^6.13.1",
     "eslint": "^8.54.0",
     "prisma": "^5.7.1",
-    "husky": "^8.0.3"
+    "husky": "^8.0.3",
+    "@types/pg": "^8.10.9",
+    "supertest": "^6.3.3",
+    "@types/supertest": "^2.0.16"
   }
 }

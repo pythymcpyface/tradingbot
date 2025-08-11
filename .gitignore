@@ -111,7 +111,10 @@ Thumbs.db
 
 # Claude Code directory
 /.claude
-CLAUDE.md
+
+# Environment files
+.env*
+!.env.example
 
 # Database files
 *.db
@@ -120,6 +123,11 @@ CLAUDE.md
 # Temporary files
 /tmp/
 /temp/
+
+# Log files
+logs/
+*.log
+migration.log
 
 # Analysis output
 analysis/*.html
