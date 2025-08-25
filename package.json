@@ -59,6 +59,7 @@
     "queryTopAlpha": "npx ts-node scripts/queryTopAlpha.ts",
     "generateTradeCharts": "npx ts-node scripts/generateTradeCharts.ts",
     "compareTopPerformers": "npx ts-node scripts/compareTopPerformers.ts",
+    "findOptimalParameters": "npx ts-node scripts/findOptimalParameters.ts",
     "clear:all": "npx ts-node scripts/clear-database.ts",
     "clear:optimization": "npx ts-node scripts/clear-optimization-results.ts",
     "clear:orders": "npx ts-node scripts/clear-backtest-orders.ts",
