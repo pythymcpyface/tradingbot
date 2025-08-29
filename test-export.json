@@ -1,0 +1,27 @@
+{
+  "exportedAt": "2025-08-26T06:20:52.895Z",
+  "parameterSets": [
+    {
+      "symbol": "BTCUSDT",
+      "baseAsset": "BTC",
+      "quoteAsset": "USDT",
+      "zScoreThreshold": 2.5,
+      "movingAverages": 100,
+      "profitPercent": 4,
+      "stopLossPercent": 2,
+      "allocationPercent": 20,
+      "enabled": true
+    },
+    {
+      "symbol": "ETHUSDT",
+      "baseAsset": "ETH",
+      "quoteAsset": "USDT",
+      "zScoreThreshold": 3.5,
+      "movingAverages": 150,
+      "profitPercent": 6,
+      "stopLossPercent": 3,
+      "allocationPercent": 15,
+      "enabled": true
+    }
+  ]
+}

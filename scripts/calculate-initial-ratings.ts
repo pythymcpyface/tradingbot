@@ -1,400 +1,292 @@
 #!/usr/bin/env ts-node
 
 /**
- * Initial Glicko-2 Ratings Calculation Script
+ * Calculate Initial Glicko-2 Ratings
  * 
- * This script calculates Glicko-2 ratings for all historical klines data
- * after the database migration is complete.
+ * This script processes the migrated historical klines data to calculate
+ * initial Glicko-2 ratings for all trading pairs based on price momentum
+ * and volume-weighted performance.
  */
 
 import { PrismaClient } from '@prisma/client';
 import { config } from 'dotenv';
-import { RustCoreService } from '../src/node-api/services/RustCoreService';
 
-// Load environment variables
 config();
 
-interface ProcessingStats {
-  totalSymbols: number;
-  processedSymbols: number;
-  totalKlines: number;
-  processedKlines: number;
-  totalRatings: number;
-  errors: number;
-  startTime: Date;
+interface PairPerformance {
+  symbol: string;
+  returns: number[];
+  volumeWeights: number[];
+  zScores: number[];
+  winRate: number;
+  avgReturn: number;
+  volatility: number;
 }
 
-class GlickoCalculator {
+class GlickoRatingCalculator {
   private prisma: PrismaClient;
-  private rustCore: RustCoreService;
-  private stats: ProcessingStats;
-
+  
+  // Glicko-2 constants
+  private readonly TAU = 0.5; // System volatility
+  private readonly EPSILON = 0.000001;
+  private readonly INITIAL_RATING = 1500;
+  private readonly INITIAL_RD = 350;
+  private readonly INITIAL_VOLATILITY = 0.06;
+  
   constructor() {
     this.prisma = new PrismaClient();
-    this.rustCore = new RustCoreService();
-    this.stats = {
-      totalSymbols: 0,
-      processedSymbols: 0,
-      totalKlines: 0,
-      processedKlines: 0,
-      totalRatings: 0,
-      errors: 0,
-      startTime: new Date()
-    };
   }
 
   async initialize(): Promise<void> {
-    console.log('🔄 Initializing Glicko-2 calculation system...');
-    
     try {
-      // Connect to database
       await this.prisma.$connect();
       console.log('✅ Connected to database');
-      
-      // Initialize Rust core (this will build if needed)
-      await this.rustCore.initialize();
-      console.log('✅ Rust core initialized');
-      
     } catch (error) {
-      console.error('❌ Initialization failed:', error);
+      console.error('❌ Database connection failed:', error);
       throw error;
     }
   }
 
-  async analyzeKlinesData(): Promise<{
-    symbols: string[];
-    totalRecords: number;
-    dateRange: { start: Date; end: Date };
-    recordsPerSymbol: Record<string, number>;
-  }> {
-    console.log('🔍 Analyzing klines data...');
+  /**
+   * Calculate z-score momentum for price movements
+   */
+  private calculateZScore(values: number[], windowSize: number = 20): number[] {
+    const zScores: number[] = [];
+    
+    for (let i = windowSize; i < values.length; i++) {
+      const window = values.slice(i - windowSize, i);
+      const mean = window.reduce((sum, val) => sum + val, 0) / window.length;
+      const variance = window.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / window.length;
+      const stdDev = Math.sqrt(variance);
+      
+      if (stdDev > 0) {
+        zScores.push((values[i] - mean) / stdDev);
+      } else {
+        zScores.push(0);
+      }
+    }
+    
+    return zScores;
+  }
 
+  /**
+   * Process historical data for a symbol to calculate performance metrics
+   */
+  async calculatePairPerformance(symbol: string): Promise<PairPerformance> {
+    console.log(`📊 Processing ${symbol}...`);
+    
+    // Get historical data ordered by time
+    const klines = await this.prisma.klines.findMany({
+      where: { symbol },
+      orderBy: { openTime: 'asc' },
+      select: {
+        openTime: true,
+        closeTime: true,
+        open: true,
+        high: true,
+        low: true,
+        close: true,
+        volume: true,
+        quoteAssetVolume: true,
+        takerBuyBaseAssetVolume: true,
+        takerBuyQuoteAssetVolume: true
+      }
+    });
+
+    if (klines.length < 50) {
+      throw new Error(`Insufficient data for ${symbol}: ${klines.length} records`);
+    }
+
+    // Calculate returns and volume metrics
+    const returns: number[] = [];
+    const volumeWeights: number[] = [];
+    
+    for (let i = 1; i < klines.length; i++) {
+      const prevClose = Number(klines[i - 1].close);
+      const currentClose = Number(klines[i].close);
+      const volumeRatio = Number(klines[i].takerBuyBaseAssetVolume) / Number(klines[i].volume);
+      
+      // Calculate price return
+      const priceReturn = (currentClose - prevClose) / prevClose;
+      returns.push(priceReturn);
+      
+      // Volume-weighted score (positive for buy pressure, negative for sell pressure)
+      const volumeWeight = volumeRatio > 0.5 ? volumeRatio : -(1 - volumeRatio);
+      volumeWeights.push(volumeWeight);
+    }
+
+    // Calculate z-scores for momentum
+    const zScores = this.calculateZScore(returns);
+    
+    // Calculate performance metrics
+    const positiveReturns = returns.filter(r => r > 0).length;
+    const winRate = positiveReturns / returns.length;
+    const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+    const volatility = Math.sqrt(variance);
+
+    return {
+      symbol,
+      returns,
+      volumeWeights,
+      zScores,
+      winRate,
+      avgReturn,
+      volatility
+    };
+  }
+
+  /**
+   * Calculate initial Glicko-2 rating based on historical performance
+   */
+  private calculateInitialGlickoRating(performance: PairPerformance): {
+    rating: number;
+    ratingDeviation: number;
+    volatility: number;
+  } {
+    // Base rating adjustments on performance metrics
+    const performanceScore = (
+      performance.winRate * 0.4 +                    // 40% win rate
+      Math.min(Math.max(performance.avgReturn * 1000, -200), 200) * 0.3 + // 30% average return (capped)
+      Math.min(Math.max(-performance.volatility * 100, -100), 100) * 0.2 + // 20% volatility (lower is better)
+      Math.min(Math.max(performance.zScores.slice(-20).reduce((sum, z) => sum + z, 0) / 20 * 50, -100), 100) * 0.1 // 10% recent momentum
+    );
+
+    // Adjust rating from base
+    const rating = this.INITIAL_RATING + performanceScore;
+    
+    // Rating deviation based on data consistency (lower volatility = more reliable)
+    const ratingDeviation = Math.max(
+      this.INITIAL_RD * (0.5 + performance.volatility * 2), // Higher volatility = higher RD
+      150 // Minimum RD
+    );
+    
+    // Volatility based on recent price behavior
+    const volatility = Math.min(Math.max(
+      this.INITIAL_VOLATILITY + (performance.volatility - 0.02), // Adjust from baseline
+      0.01
+    ), 0.2);
+
+    return {
+      rating: Math.round(rating),
+      ratingDeviation: Math.round(ratingDeviation * 100) / 100,
+      volatility: Math.round(volatility * 10000) / 10000
+    };
+  }
+
+  /**
+   * Process all symbols and calculate initial ratings
+   */
+  async calculateAllInitialRatings(): Promise<void> {
+    console.log('🚀 Calculating initial Glicko-2 ratings from historical data...');
+    
     // Get all unique symbols
     const symbols = await this.prisma.klines.findMany({
-      distinct: ['symbol'],
       select: { symbol: true },
-      orderBy: { symbol: 'asc' }
+      distinct: ['symbol']
     });
 
-    // Get overall statistics
-    const stats = await this.prisma.klines.aggregate({
-      _count: { id: true },
-      _min: { openTime: true },
-      _max: { closeTime: true }
-    });
-
-    // Get records per symbol
-    const recordsPerSymbol: Record<string, number> = {};
+    console.log(`📈 Processing ${symbols.length} trading pairs...`);
     
-    for (const symbolRecord of symbols) {
-      const count = await this.prisma.klines.count({
-        where: { symbol: symbolRecord.symbol }
-      });
-      recordsPerSymbol[symbolRecord.symbol] = count;
-    }
+    const ratings: Array<{
+      symbol: string;
+      timestamp: Date;
+      rating: number;
+      ratingDeviation: number;
+      volatility: number;
+      performanceScore: number;
+    }> = [];
 
-    const symbolList = symbols.map(s => s.symbol);
-    const analysis = {
-      symbols: symbolList,
-      totalRecords: stats._count.id || 0,
-      dateRange: {
-        start: stats._min.openTime || new Date(),
-        end: stats._max.closeTime || new Date()
-      },
-      recordsPerSymbol
-    };
+    // Process each symbol
+    for (const { symbol } of symbols) {
+      try {
+        const performance = await this.calculatePairPerformance(symbol);
+        const glickoRating = this.calculateInitialGlickoRating(performance);
+        
+        // Calculate performance score for this pair (0-9.99 scale to fit decimal(3,2))
+        const performanceScore = Math.min(Math.max(
+          (performance.winRate * 4) + 
+          (Math.min(Math.max(performance.avgReturn * 100 + 1, 0), 3)) +
+          (Math.min(Math.max(3 - performance.volatility * 10, 0), 3)),
+          0
+        ), 9.99);
 
-    this.stats.totalSymbols = symbolList.length;
-    this.stats.totalKlines = analysis.totalRecords;
-
-    console.log('📊 Klines Data Analysis:');
-    console.log(`  - Total symbols: ${symbolList.length}`);
-    console.log(`  - Total records: ${analysis.totalRecords.toLocaleString()}`);
-    console.log(`  - Date range: ${analysis.dateRange.start.toISOString()} to ${analysis.dateRange.end.toISOString()}`);
-    console.log(`  - Top symbols by records:`);
-    
-    const sortedSymbols = Object.entries(recordsPerSymbol)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 10);
-    
-    sortedSymbols.forEach(([symbol, count]) => {
-      console.log(`    ${symbol}: ${count.toLocaleString()}`);
-    });
-
-    return analysis;
-  }
-
-  async calculateRatingsForSymbol(
-    symbol: string, 
-    batchSize: number = 10000
-  ): Promise<number> {
-    console.log(`🔄 Processing ${symbol}...`);
-
-    try {
-      // Get total count for this symbol
-      const totalCount = await this.prisma.klines.count({
-        where: { symbol }
-      });
-
-      if (totalCount === 0) {
-        console.log(`⚠️ No data found for ${symbol}`);
-        return 0;
-      }
-
-      console.log(`  - Total records: ${totalCount.toLocaleString()}`);
-
-      let processedCount = 0;
-      let ratingsCount = 0;
-      let offset = 0;
-
-      while (offset < totalCount) {
-        const batchStartTime = Date.now();
-
-        // Fetch batch of klines
-        const klines = await this.prisma.klines.findMany({
-          where: { symbol },
-          orderBy: { openTime: 'asc' },
-          take: batchSize,
-          skip: offset
+        ratings.push({
+          symbol,
+          timestamp: new Date(),
+          rating: glickoRating.rating,
+          ratingDeviation: glickoRating.ratingDeviation,
+          volatility: glickoRating.volatility,
+          performanceScore: performanceScore
         });
 
-        if (klines.length === 0) break;
-
-        // Transform to format expected by Rust core
-        const klinesData = klines.map(k => ({
-          symbol: k.symbol,
-          open_time: k.openTime.getTime(),
-          close_time: k.closeTime.getTime(),
-          open: parseFloat(k.open.toString()),
-          high: parseFloat(k.high.toString()),
-          low: parseFloat(k.low.toString()),
-          close: parseFloat(k.close.toString()),
-          volume: parseFloat(k.volume.toString()),
-          quote_asset_volume: parseFloat(k.quoteAssetVolume.toString()),
-          number_of_trades: k.numberOfTrades,
-          taker_buy_base_asset_volume: parseFloat(k.takerBuyBaseAssetVolume.toString()),
-          taker_buy_quote_asset_volume: parseFloat(k.takerBuyQuoteAssetVolume.toString())
-        }));
-
-        // Calculate Glicko-2 ratings using Rust core
-        const ratings = await this.rustCore.calculateGlickoRatings(klinesData);
-
-        // Save ratings to database
-        if (ratings.length > 0) {
-          const savedRatings = await this.prisma.glickoRatings.createMany({
-            data: ratings.map(r => ({
-              symbol: r.symbol,
-              timestamp: new Date(r.timestamp),
-              rating: r.rating,
-              ratingDeviation: r.rating_deviation,
-              volatility: r.volatility,
-              performanceScore: r.performance_score
-            })),
-            skipDuplicates: true
-          });
-
-          ratingsCount += savedRatings.count;
-        }
-
-        processedCount += klines.length;
-        offset += batchSize;
-
-        const batchTime = Date.now() - batchStartTime;
-        const progress = (processedCount / totalCount * 100).toFixed(1);
-        const rate = Math.round(klines.length / (batchTime / 1000));
-
-        console.log(`    Progress: ${progress}% (${processedCount.toLocaleString()}/${totalCount.toLocaleString()}) - ${rate} records/sec`);
+        console.log(`✅ ${symbol}: Rating=${glickoRating.rating}, RD=${glickoRating.ratingDeviation}, Vol=${glickoRating.volatility}`);
+        
+      } catch (error) {
+        console.error(`❌ Error processing ${symbol}:`, error);
       }
-
-      console.log(`✅ ${symbol} completed: ${ratingsCount.toLocaleString()} ratings calculated`);
-      
-      this.stats.processedSymbols++;
-      this.stats.processedKlines += processedCount;
-      this.stats.totalRatings += ratingsCount;
-
-      return ratingsCount;
-
-    } catch (error) {
-      console.error(`❌ Error processing ${symbol}:`, error);
-      this.stats.errors++;
-      return 0;
-    }
-  }
-
-  async calculateAllRatings(
-    targetSymbols?: string[],
-    batchSize: number = 10000
-  ): Promise<void> {
-    console.log('🚀 Starting Glicko-2 ratings calculation...');
-
-    const analysis = await this.analyzeKlinesData();
-    const symbolsToProcess = targetSymbols || analysis.symbols;
-
-    console.log(`📋 Processing ${symbolsToProcess.length} symbols...`);
-
-    // Process each symbol sequentially to avoid memory issues
-    for (let i = 0; i < symbolsToProcess.length; i++) {
-      const symbol = symbolsToProcess[i];
-      console.log(`\n[${i + 1}/${symbolsToProcess.length}] Processing ${symbol}...`);
-
-      await this.calculateRatingsForSymbol(symbol, batchSize);
-
-      // Print progress summary
-      this.printProgressSummary();
     }
 
-    console.log('\n🎉 All symbols processed!');
-    await this.createOptimizedIndexes();
-    this.printFinalSummary();
-  }
-
-  private printProgressSummary(): void {
-    const elapsed = Date.now() - this.stats.startTime.getTime();
-    const elapsedMinutes = Math.round(elapsed / 60000);
+    // Save ratings to database
+    console.log('\n💾 Saving ratings to database...');
     
-    console.log(`\n📊 Progress Summary:`);
-    console.log(`  - Symbols: ${this.stats.processedSymbols}/${this.stats.totalSymbols}`);
-    console.log(`  - Klines processed: ${this.stats.processedKlines.toLocaleString()}`);
-    console.log(`  - Ratings calculated: ${this.stats.totalRatings.toLocaleString()}`);
-    console.log(`  - Errors: ${this.stats.errors}`);
-    console.log(`  - Elapsed time: ${elapsedMinutes} minutes`);
+    // Clear existing ratings first
+    await this.prisma.glickoRatings.deleteMany({});
     
-    if (this.stats.processedSymbols > 0) {
-      const avgTime = elapsedMinutes / this.stats.processedSymbols;
-      const remaining = this.stats.totalSymbols - this.stats.processedSymbols;
-      const eta = Math.round(remaining * avgTime);
-      console.log(`  - ETA: ${eta} minutes remaining`);
-    }
-  }
+    // Insert new ratings
+    const result = await this.prisma.glickoRatings.createMany({
+      data: ratings,
+      skipDuplicates: false
+    });
 
-  private printFinalSummary(): void {
-    const elapsed = Date.now() - this.stats.startTime.getTime();
-    const elapsedMinutes = Math.round(elapsed / 60000);
+    console.log(`✅ Saved ${result.count} initial ratings`);
     
-    console.log(`\n✅ Final Summary:`);
-    console.log(`  - Total symbols processed: ${this.stats.processedSymbols}`);
-    console.log(`  - Total klines processed: ${this.stats.processedKlines.toLocaleString()}`);
-    console.log(`  - Total ratings calculated: ${this.stats.totalRatings.toLocaleString()}`);
-    console.log(`  - Total errors: ${this.stats.errors}`);
-    console.log(`  - Total time: ${elapsedMinutes} minutes`);
+    // Display summary statistics
+    const avgRating = ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length;
+    const minRating = Math.min(...ratings.map(r => r.rating));
+    const maxRating = Math.max(...ratings.map(r => r.rating));
     
-    if (this.stats.processedKlines > 0) {
-      const rate = Math.round(this.stats.processedKlines / (elapsed / 1000));
-      console.log(`  - Average rate: ${rate} klines/sec`);
-    }
-  }
-
-  async createOptimizedIndexes(): Promise<void> {
-    console.log('🔧 Creating optimized indexes for Glicko ratings...');
-
-    try {
-      await this.prisma.$executeRaw`
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_glicko_ratings_symbol_timestamp_desc
-        ON "glicko_ratings" (symbol, timestamp DESC);
-      `;
-
-      await this.prisma.$executeRaw`
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_glicko_ratings_timestamp_desc
-        ON "glicko_ratings" (timestamp DESC);
-      `;
-
-      await this.prisma.$executeRaw`
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_glicko_ratings_rating_desc
-        ON "glicko_ratings" (rating DESC);
-      `;
-
-      console.log('✅ Indexes created successfully');
-
-    } catch (error) {
-      console.error('⚠️ Some indexes may already exist or failed to create:', error);
-    }
-  }
-
-  async validateCalculations(): Promise<boolean> {
-    console.log('🔍 Validating Glicko-2 calculations...');
-
-    try {
-      // Check basic statistics
-      const ratingStats = await this.prisma.glickoRatings.aggregate({
-        _count: { id: true },
-        _avg: { rating: true, ratingDeviation: true, volatility: true },
-        _min: { rating: true, timestamp: true },
-        _max: { rating: true, timestamp: true }
-      });
-
-      const uniqueSymbols = await this.prisma.glickoRatings.findMany({
-        distinct: ['symbol'],
-        select: { symbol: true }
-      });
-
-      console.log('📊 Validation Results:');
-      console.log(`  - Total ratings: ${ratingStats._count.id?.toLocaleString()}`);
-      console.log(`  - Unique symbols: ${uniqueSymbols.length}`);
-      console.log(`  - Average rating: ${ratingStats._avg.rating?.toFixed(2)}`);
-      console.log(`  - Average RD: ${ratingStats._avg.ratingDeviation?.toFixed(2)}`);
-      console.log(`  - Average volatility: ${ratingStats._avg.volatility?.toFixed(4)}`);
-      console.log(`  - Rating range: ${ratingStats._min.rating?.toFixed(2)} - ${ratingStats._max.rating?.toFixed(2)}`);
-      console.log(`  - Date range: ${ratingStats._min.timestamp} to ${ratingStats._max.timestamp}`);
-
-      // Validate rating distributions look reasonable
-      const isValid = (
-        ratingStats._count.id !== null && ratingStats._count.id > 0 &&
-        ratingStats._avg.rating !== null && ratingStats._avg.rating > 1000 &&
-        ratingStats._avg.ratingDeviation !== null && ratingStats._avg.ratingDeviation > 0 &&
-        uniqueSymbols.length > 0
-      );
-
-      if (isValid) {
-        console.log('✅ Validation passed');
-      } else {
-        console.log('❌ Validation failed');
-      }
-
-      return isValid;
-
-    } catch (error) {
-      console.error('❌ Validation error:', error);
-      return false;
-    }
+    console.log('\n📊 Rating Summary:');
+    console.log(`  - Average Rating: ${Math.round(avgRating)}`);
+    console.log(`  - Rating Range: ${minRating} to ${maxRating}`);
+    console.log(`  - Total Pairs: ${ratings.length}`);
+    
+    // Show top and bottom performers
+    const sortedRatings = ratings.sort((a, b) => b.rating - a.rating);
+    
+    console.log('\n🏆 Top 5 Rated Pairs:');
+    sortedRatings.slice(0, 5).forEach((r, i) => {
+      console.log(`  ${i + 1}. ${r.symbol}: ${r.rating} (RD: ${r.ratingDeviation})`);
+    });
+    
+    console.log('\n📉 Bottom 5 Rated Pairs:');
+    sortedRatings.slice(-5).forEach((r, i) => {
+      console.log(`  ${i + 1}. ${r.symbol}: ${r.rating} (RD: ${r.ratingDeviation})`);
+    });
   }
 
   async cleanup(): Promise<void> {
-    console.log('🧹 Cleaning up...');
-    try {
-      await this.prisma.$disconnect();
-      console.log('✅ Database disconnected');
-    } catch (error) {
-      console.error('⚠️ Cleanup warning:', error);
-    }
+    await this.prisma.$disconnect();
+    console.log('🧹 Cleanup completed');
   }
 }
 
-// Main function
+// Main execution function
 async function main() {
-  const calculator = new GlickoCalculator();
-
+  const calculator = new GlickoRatingCalculator();
+  
   try {
-    console.log('🚀 Starting Glicko-2 ratings calculation...');
+    console.log('🎯 Starting initial Glicko-2 rating calculation...');
     console.log('=' .repeat(60));
-
-    await calculator.initialize();
-    await calculator.calculateAllRatings();
-
-    const isValid = await calculator.validateCalculations();
     
-    if (isValid) {
-      console.log('\n🎉 Glicko-2 ratings calculation completed successfully!');
-      console.log('\nNext steps:');
-      console.log('  1. Start the API server: npm run dev');
-      console.log('  2. Check the /api/glicko/latest endpoint for recent ratings');
-      console.log('  3. Run your first backtest with the calculated ratings');
-    } else {
-      console.log('\n❌ Validation failed. Please check the logs and data.');
-      process.exit(1);
-    }
-
+    await calculator.initialize();
+    await calculator.calculateAllInitialRatings();
+    
+    console.log('\n🎉 Initial rating calculation completed successfully!');
+    console.log('The Glicko-2 ratings are now ready for backtesting and live trading.');
+    
   } catch (error) {
-    console.error('\n💥 Calculation failed:', error);
+    console.error('\n💥 Rating calculation failed:', error);
     process.exit(1);
   } finally {
     await calculator.cleanup();
@@ -403,13 +295,7 @@ async function main() {
 
 // Run if called directly
 if (require.main === module) {
-  // Handle graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('\n🛑 Calculation interrupted by user');
-    process.exit(0);
-  });
-
   main().catch(console.error);
 }
 
-export { GlickoCalculator };
+export { GlickoRatingCalculator };

@@ -129,3 +129,53 @@ export interface TradingPair {
   quoteAsset: string;
   isActive: boolean;
 }
+
+export interface BacktestResult {
+  config: BacktestConfig;
+  orders: BacktestOrder[];
+  metrics: PerformanceMetrics;
+  equity: Array<{
+    timestamp: Date;
+    value: number;
+  }>;
+}
+
+export interface TradingParameterSet {
+  symbol: string;
+  baseAsset: string;
+  quoteAsset: string;
+  zScoreThreshold: number;
+  movingAverages: number;
+  profitPercent: number;
+  stopLossPercent: number;
+  allocationPercent?: number;
+  enabled?: boolean;
+}
+
+export interface ActivePosition {
+  symbol: string;
+  entryPrice: number;
+  quantity: number;
+  entryTime: Date;
+  buyOrderId: string;
+  ocoOrderId: string;
+  takeProfitOrderId?: string;
+  stopLossOrderId?: string;
+  takeProfitPrice: number;
+  stopLossPrice: number;
+  zScoreThreshold: number;
+  parameters: TradingParameterSet;
+}
+
+export interface PaperPosition {
+  symbol: string;
+  entryPrice: number;
+  quantity: number;
+  entryTime: Date;
+  takeProfitPrice: number;
+  stopLossPrice: number;
+  parameters: TradingParameterSet;
+  entryValue: number; // USDT value at entry
+  unrealizedPnL?: number;
+  unrealizedPnLPercent?: number;
+}

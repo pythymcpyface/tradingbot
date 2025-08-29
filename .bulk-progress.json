@@ -1,0 +1,15 @@
+{
+  "totalSymbols": 40,
+  "completedSymbols": 19,
+  "failedSymbols": [],
+  "totalRecords": 6733152,
+  "startTime": "2025-08-19T20:34:12.392Z",
+  "currentBatch": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "ADAUSDT",
+    "SOLUSDT",
+    "XRPUSDT"
+  ],
+  "estimatedCompletion": "2025-09-07T06:50:17.455Z"
+}

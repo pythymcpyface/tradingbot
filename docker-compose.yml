@@ -4,7 +4,7 @@ services:
   # New PostgreSQL database for the trading bot
   postgres:
     image: postgres:15
-    container_name: tradingbot-postgres
+    container_name: tradingbot-postgres-glicko
     restart: unless-stopped
     environment:
       POSTGRES_DB: tradingbot_glicko
@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: secure_password_2024
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5433:5432"  # Using 5433 to avoid conflict with existing DB
+      - "5437:5432"  # Using 5437 to avoid port conflicts
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -31,7 +31,7 @@ services:
   # Redis for caching (optional but recommended for production)
   redis:
     image: redis:7-alpine
-    container_name: tradingbot-redis
+    container_name: tradingbot-redis-glicko
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -44,7 +44,7 @@ services:
   # PgAdmin for database management (development only)
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: tradingbot-pgadmin
+    container_name: tradingbot-pgadmin-glicko
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@tradingbot.local

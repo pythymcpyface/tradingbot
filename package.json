@@ -34,6 +34,7 @@
     "plotGlickoRatings": "npx ts-node scripts/plotGlickoRatings.ts",
     "startTrading": "npx ts-node scripts/startTradingEngine.ts",
     "startPaperTrading": "npx ts-node scripts/startTradingEngine.ts --paper",
+    "testParameterSets": "npx ts-node scripts/test-parameter-sets.ts",
     "runWindowedBacktest": "npx ts-node scripts/runWindowedBacktest.ts",
     "runAllWindowedBacktests": "npx ts-node scripts/runAllWindowedBacktests.ts",
     "runAllWindowedBacktestsForPair": "npx ts-node scripts/runAllWindowedBacktestsForPair.ts --",

@@ -60,7 +60,6 @@ This bot implements a novel approach to cryptocurrency trading using the Glicko-
 
 ### Prerequisites
 - Node.js 18+ 
-- Rust 1.70+
 - PostgreSQL 13+
 - Docker (optional)
 
@@ -74,11 +73,7 @@ cd tradingbot_glicko
 
 2. **Install dependencies**
 ```bash
-# Install Node.js dependencies
 npm install
-
-# Build Rust core
-cd src/rust-core && cargo build --release
 ```
 
 3. **Set up environment variables**
@@ -90,20 +85,26 @@ cp .env.example .env
 4. **Database setup**
 ```bash
 # Start PostgreSQL
-docker-compose up -d postgres
+npm run docker:up
 
-# Run migrations
-npx prisma migrate dev
+# Generate Prisma client
+npm run prisma:generate
 ```
 
-5. **Start the services**
+5. **Run your first analysis**
 ```bash
-# Start API server
-npm run dev
-
-# Start React dashboard (in another terminal)
-cd src/web-ui && npm start
+# Quick test (see guides for details)
+npm run getTradingPairs
+npm run getKlines "BTCUSDT,ETHUSDT" "2024-01-01" "2024-01-02"
+npm run calculateGlickoRatings "BTC,ETH" "2024-01-01" "2024-01-02"
+npm run plotGlickoRatings
 ```
+
+## 📖 Execution Guides
+
+- **[Quick Start Guide](QUICK_START_GUIDE.md)** - Get up and running in 5 minutes
+- **[Stage Execution Guide](STAGE_EXECUTION_GUIDE.md)** - Complete step-by-step instructions for all stages
+- **[Troubleshooting](STAGE_EXECUTION_GUIDE.md#-troubleshooting)** - Common issues and solutions
 
 ## 🔧 Configuration
 

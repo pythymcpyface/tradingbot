@@ -107,8 +107,8 @@ class DatabaseMigrator {
         SELECT 
           COUNT(*) as total_records,
           COUNT(DISTINCT symbol) as unique_symbols,
-          MIN(open_time) as earliest_date,
-          MAX(close_time) as latest_date
+          MIN("openTime") as earliest_date,
+          MAX("closeTime") as latest_date
         FROM ${tableName}
       `);
       
@@ -184,21 +184,20 @@ class DatabaseMigrator {
         const batchResult = await this.oldDb.query(`
           SELECT 
             symbol,
-            open_time,
-            close_time,
+            "openTime",
+            "closeTime",
             open,
             high,
             low,
             close,
             volume,
-            quote_asset_volume,
-            number_of_trades,
-            taker_buy_base_asset_volume,
-            taker_buy_quote_asset_volume,
-            ignore
+            "quoteAssetVolume",
+            "takerBuyBaseAssetVolume",
+            "takerBuyQuoteAssetVolume",
+            "takerSellBaseAssetVolume"
           FROM ${tableName}
           ${whereClause}
-          ORDER BY symbol, open_time
+          ORDER BY symbol, "openTime"
           LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
         `, [...queryParams, batchSize, offset]);
         
@@ -206,21 +205,21 @@ class DatabaseMigrator {
           break;
         }
         
-        // Transform and validate data
-        const transformedData = batchResult.rows.map((row: OldKlineRecord) => ({
+        // Transform and validate data - handle camelCase columns from existing database
+        const transformedData = batchResult.rows.map((row: any) => ({
           symbol: row.symbol,
-          openTime: new Date(row.open_time),
-          closeTime: new Date(row.close_time),
+          openTime: new Date(row.openTime || row.open_time),
+          closeTime: new Date(row.closeTime || row.close_time),
           open: parseFloat(row.open.toString()),
           high: parseFloat(row.high.toString()),
           low: parseFloat(row.low.toString()),
           close: parseFloat(row.close.toString()),
           volume: parseFloat(row.volume.toString()),
-          quoteAssetVolume: parseFloat(row.quote_asset_volume.toString()),
-          numberOfTrades: row.number_of_trades,
-          takerBuyBaseAssetVolume: parseFloat(row.taker_buy_base_asset_volume.toString()),
-          takerBuyQuoteAssetVolume: parseFloat(row.taker_buy_quote_asset_volume.toString()),
-          ignore: parseFloat(row.ignore.toString())
+          quoteAssetVolume: parseFloat((row.quoteAssetVolume || row.quote_asset_volume).toString()),
+          numberOfTrades: parseInt((row.numberOfTrades || row.number_of_trades || 0).toString()),
+          takerBuyBaseAssetVolume: parseFloat((row.takerBuyBaseAssetVolume || row.taker_buy_base_asset_volume).toString()),
+          takerBuyQuoteAssetVolume: parseFloat((row.takerBuyQuoteAssetVolume || row.taker_buy_quote_asset_volume).toString()),
+          ignore: parseFloat((row.takerSellBaseAssetVolume || row.taker_sell_base_asset_volume || 0).toString())
         }));
         
         // Insert batch into new database

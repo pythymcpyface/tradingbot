@@ -1,0 +1,48 @@
+{
+    "parameterSets": [
+        {
+            "symbol": "BTCUSDT",
+            "baseAsset": "BTC",
+            "quoteAsset": "USDT",
+            "zScoreThreshold": 6.0,
+            "movingAverages": 10,
+            "profitPercent": 31.0,
+            "stopLossPercent": 16,
+            "allocationPercent": 33.0,
+            "enabled": true
+        },
+        {
+            "symbol": "BNBUSDT",
+            "baseAsset": "BNB",
+            "quoteAsset": "USDT",
+            "zScoreThreshold": 6.5,
+            "movingAverages": 10,
+            "profitPercent": 4.0,
+            "stopLossPercent": 16,
+            "allocationPercent": 33.0,
+            "enabled": true
+        },
+        {
+            "symbol": "ETHUSDT",
+            "baseAsset": "ETH",
+            "quoteAsset": "USDT",
+            "zScoreThreshold": 6.0,
+            "movingAverages": 10,
+            "profitPercent": 15.0,
+            "stopLossPercent": 3,
+            "allocationPercent": 33.0,
+            "enabled": true
+        },
+        {
+            "symbol": "ETHUSDT",
+            "baseAsset": "ETH",
+            "quoteAsset": "USDT",
+            "zScoreThreshold": 0.1,
+            "movingAverages": 1,
+            "profitPercent": 1.0,
+            "stopLossPercent": 3,
+            "allocationPercent": 33.0,
+            "enabled": true
+        }
+    ]
+}

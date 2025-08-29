@@ -1,0 +1,61 @@
+{
+  "description": "Example trading parameter sets for live trading bot",
+  "exportedAt": "2024-01-01T00:00:00.000Z",
+  "parameterSets": [
+    {
+      "symbol": "BTCUSDT",
+      "baseAsset": "BTC",
+      "quoteAsset": "USDT",
+      "zScoreThreshold": 3.0,
+      "movingAverages": 200,
+      "profitPercent": 5.0,
+      "stopLossPercent": 2.5,
+      "allocationPercent": 15.0,
+      "enabled": true
+    },
+    {
+      "symbol": "ETHUSDT",
+      "baseAsset": "ETH",
+      "quoteAsset": "USDT",
+      "zScoreThreshold": 2.8,
+      "movingAverages": 150,
+      "profitPercent": 6.0,
+      "stopLossPercent": 3.0,
+      "allocationPercent": 12.0,
+      "enabled": true
+    },
+    {
+      "symbol": "ADAUSDT",
+      "baseAsset": "ADA",
+      "quoteAsset": "USDT",
+      "zScoreThreshold": 3.2,
+      "movingAverages": 250,
+      "profitPercent": 4.5,
+      "stopLossPercent": 2.0,
+      "allocationPercent": 10.0,
+      "enabled": true
+    },
+    {
+      "symbol": "SOLUSDT",
+      "baseAsset": "SOL",
+      "quoteAsset": "USDT",
+      "zScoreThreshold": 3.5,
+      "movingAverages": 100,
+      "profitPercent": 7.0,
+      "stopLossPercent": 3.5,
+      "allocationPercent": 8.0,
+      "enabled": true
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "baseAsset": "DOGE",
+      "quoteAsset": "USDT",
+      "zScoreThreshold": 4.0,
+      "movingAverages": 200,
+      "profitPercent": 10.0,
+      "stopLossPercent": 4.0,
+      "allocationPercent": 5.0,
+      "enabled": false
+    }
+  ]
+}

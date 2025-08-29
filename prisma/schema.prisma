@@ -127,6 +127,7 @@ model OptimizationResults {
   endTime           DateTime
   totalReturn       Decimal  @db.Decimal(10, 4)
   annualizedReturn  Decimal  @db.Decimal(10, 4)
+  benchmarkReturn   Decimal? @db.Decimal(10, 4)
   sharpeRatio       Decimal  @db.Decimal(10, 4)
   sortinoRatio      Decimal  @db.Decimal(10, 4)
   alpha             Decimal  @db.Decimal(10, 4)
@@ -135,6 +136,7 @@ model OptimizationResults {
   totalTrades       Int
   profitFactor      Decimal  @db.Decimal(10, 4)
   avgTradeDuration  Decimal  @db.Decimal(10, 2) // in hours
+  calmarRatio       Decimal? @db.Decimal(10, 4) // annualizedReturn / maxDrawdown
   createdAt         DateTime @default(now())
 
   backtestRun BacktestRuns @relation(fields: [runId], references: [id])
@@ -143,6 +145,7 @@ model OptimizationResults {
   @@index([baseAsset, quoteAsset])
   @@index([totalReturn])
   @@index([sharpeRatio])
+  @@index([calmarRatio])
   @@map("optimization_results")
 }
 

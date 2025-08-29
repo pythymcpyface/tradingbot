@@ -7,6 +7,7 @@ export interface BinanceConfig {
   apiKey: string;
   apiSecret: string;
   testnet?: boolean;
+  paperTrading?: boolean;
 }
 
 export interface OrderRequest {
@@ -27,10 +28,12 @@ export class BinanceService extends EventEmitter {
   private isInitialized: boolean = false;
   private activePositions: Map<string, any> = new Map();
   private priceSubscriptions: Map<string, any> = new Map();
+  private paperTrading: boolean = false;
 
   constructor(config: BinanceConfig, prisma: PrismaClient) {
     super();
     this.prisma = prisma;
+    this.paperTrading = config.paperTrading || false;
     
     this.client = Binance({
       apiKey: config.apiKey,
@@ -43,16 +46,21 @@ export class BinanceService extends EventEmitter {
 
   async initialize(): Promise<void> {
     try {
-      // Test API connection
+      // Always test basic API connection first
       await this.client.ping();
+      console.log('✅ Binance API connection test successful');
       
-      // Get account info to validate credentials
-      const accountInfo = await this.client.accountInfo();
-      console.log('Binance API connected successfully');
-      console.log('Account status:', accountInfo.accountType);
-      
-      // Load existing positions
-      await this.loadExistingPositions();
+      if (!this.paperTrading) {
+        // Live trading mode - full validation
+        const accountInfo = await this.client.accountInfo();
+        console.log('Binance API connected successfully');
+        console.log('Account status:', accountInfo.accountType);
+        
+        // Load existing positions
+        await this.loadExistingPositions();
+      } else {
+        console.log('📝 Paper trading mode - using real market data, no account validation');
+      }
       
       this.isInitialized = true;
       this.emit('initialized');
@@ -131,26 +139,62 @@ export class BinanceService extends EventEmitter {
       
       const klines = await this.client.candles(options);
       
-      return klines.map((kline: any[]) => ({
-        symbol,
-        openTime: new Date(kline[0]),
-        closeTime: new Date(kline[6]),
-        open: parseFloat(kline[1]),
-        high: parseFloat(kline[2]),
-        low: parseFloat(kline[3]),
-        close: parseFloat(kline[4]),
-        volume: parseFloat(kline[5]),
-        quoteAssetVolume: parseFloat(kline[7]),
-        numberOfTrades: kline[8],
-        takerBuyBaseAssetVolume: parseFloat(kline[9]),
-        takerBuyQuoteAssetVolume: parseFloat(kline[10]),
-        ignore: parseFloat(kline[11])
-      }));
+      // Check if we got valid data
+      if (!klines || klines.length === 0) {
+        throw new Error(`No klines data received for ${symbol}`);
+      }
+      
+      // Debug: log raw response structure
+      console.log(`🔍 Raw klines response for ${symbol}:`, {
+        length: klines.length,
+        firstKline: klines[0],
+        klineType: typeof klines[0],
+        isArray: Array.isArray(klines[0])
+      });
+      
+      const processedKlines = klines.map((kline: any) => {
+        // Binance returns klines as objects with named properties
+        const processed = {
+          symbol,
+          openTime: new Date(kline.openTime),
+          closeTime: new Date(kline.closeTime),
+          open: parseFloat(kline.open),
+          high: parseFloat(kline.high),
+          low: parseFloat(kline.low),
+          close: parseFloat(kline.close),
+          volume: parseFloat(kline.volume),
+          quoteAssetVolume: parseFloat(kline.quoteVolume),
+          numberOfTrades: kline.trades,
+          takerBuyBaseAssetVolume: parseFloat(kline.baseAssetVolume),
+          takerBuyQuoteAssetVolume: parseFloat(kline.quoteAssetVolume),
+          ignore: 0
+        };
+        
+        // Debug first processed kline
+        if (kline === klines[0]) {
+          console.log(`🔍 First processed kline for ${symbol}:`, processed);
+        }
+        
+        return processed;
+      });
+      
+      // Validate the processed data
+      const validKlines = processedKlines.filter((k: any) => !isNaN(k.close) && k.close > 0);
+      
+      console.log(`📊 ${symbol}: ${validKlines.length}/${processedKlines.length} valid klines`);
+      
+      if (validKlines.length === 0) {
+        throw new Error(`All klines data is invalid for ${symbol}`);
+      }
+      
+      return validKlines;
+      
     } catch (error) {
-      console.error('Error fetching klines:', error);
+      console.error(`Error fetching klines for ${symbol}:`, error);
       throw error;
     }
   }
+
 
   async getCurrentPrice(symbol: string): Promise<number> {
     try {
@@ -469,6 +513,27 @@ export class BinanceService extends EventEmitter {
       this.emit('positionsUpdated', this.activePositions);
     } catch (error) {
       console.error('Error updating active positions:', error);
+    }
+  }
+
+  async getAccountInfo(): Promise<any> {
+    try {
+      if (this.paperTrading) {
+        // Return mock account info for paper trading
+        return {
+          balances: [
+            { asset: 'USDT', free: '10000.00', locked: '0.00' },
+            { asset: 'BTC', free: '0.00', locked: '0.00' },
+            { asset: 'ETH', free: '0.00', locked: '0.00' },
+            { asset: 'BNB', free: '0.00', locked: '0.00' }
+          ]
+        };
+      }
+      
+      return await this.client.accountInfo();
+    } catch (error) {
+      console.error('Error getting account info:', error);
+      throw error;
     }
   }
 
