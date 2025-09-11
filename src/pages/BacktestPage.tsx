@@ -175,7 +175,7 @@ const BacktestPage: React.FC = () => {
   };
 
   const formatMetric = (value: number | undefined | null, decimals: number = 2, suffix: string = '') => {
-    if (value === undefined || value === null || typeof value !== 'number' || isNaN(value)) return '-';
+    if (value === undefined || value === null) return '-';
     return `${value.toFixed(decimals)}${suffix}`;
   };
 

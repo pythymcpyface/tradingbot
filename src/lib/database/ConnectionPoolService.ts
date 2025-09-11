@@ -210,7 +210,7 @@ class ConnectionPoolService {
     endTime: Date
   ): Promise<any[]> {
     const sql = `
-      SELECT symbol, timestamp, rating, rating_deviation, volatility 
+      SELECT symbol, timestamp, rating, "ratingDeviation", volatility 
       FROM glicko_ratings 
       WHERE symbol = $1 AND timestamp BETWEEN $2 AND $3
       ORDER BY timestamp

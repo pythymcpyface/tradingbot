@@ -1,9 +1,9 @@
 import { EventEmitter } from 'events';
-import { PrismaClient } from '@prisma/client';
 import BinanceService from './BinanceService';
 import { RustCoreService } from './RustCoreService';
 import { ZScoreSignal, TradingParameterSet, ActivePosition, PaperPosition } from '../../types';
 import { Logger, LogLevel } from '../../services/Logger';
+import { AllocationManager } from '../../services/AllocationManager';
 
 export interface TradingConfig {
   zScoreThreshold: number;
@@ -35,7 +35,6 @@ export interface TradingState {
 }
 
 export class TradingEngine extends EventEmitter {
-  private prisma: PrismaClient;
   private binanceService: BinanceService;
   private rustCore: RustCoreService;
   private config: TradingConfig;
@@ -48,19 +47,19 @@ export class TradingEngine extends EventEmitter {
   private paperTradingBalance: number = 10000; // Start with $10k virtual balance
   private paperPositions: Map<string, PaperPosition> = new Map();
   private logger: Logger;
+  private allocationManager: AllocationManager;
 
   constructor(
-    prisma: PrismaClient,
     binanceService: BinanceService,
     rustCore: RustCoreService,
     config: TradingConfig
   ) {
     super();
-    this.prisma = prisma;
     this.binanceService = binanceService;
     this.rustCore = rustCore;
     this.config = config;
     this.logger = new Logger('./logs', LogLevel.INFO);
+    this.allocationManager = new AllocationManager();
     
     this.state = {
       isRunning: false,
@@ -118,6 +117,12 @@ export class TradingEngine extends EventEmitter {
       if (!this.rustCore.isInitialized()) {
         await this.rustCore.initialize();
         await this.logger.info('ENGINE', 'Rust core service initialized');
+      }
+
+      // Initialize allocation manager
+      if (this.config.enableLiveTrading) {
+        await this.allocationManager.initialize(this.binanceService);
+        await this.logger.info('ENGINE', 'Allocation manager initialized');
       }
 
       // Start price streaming for all BASE_COINS (monitoring) but only trade parameter set symbols
@@ -207,26 +212,10 @@ export class TradingEngine extends EventEmitter {
     try {
       let ratings: any[] = [];
       
-      if (!this.config.enableLiveTrading) {
-        // Paper trading: Calculate real-time Z-scores from live market data
-        await this.logger.info('SIGNALS', 'Paper trading: Calculating real-time Z-scores from market data');
-        console.log('📊 Paper trading: Calculating real-time Z-scores from market data...');
-        ratings = await this.calculateRealTimeRatings();
-      } else {
-        // Live trading: Use stored Glicko ratings
-        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-        
-        ratings = await this.prisma.glickoRatings.findMany({
-          where: {
-            symbol: { in: this.config.symbols },
-            timestamp: { gte: twoHoursAgo }
-          },
-          orderBy: [
-            { symbol: 'asc' },
-            { timestamp: 'desc' }
-          ]
-        });
-      }
+      // Always calculate real-time Z-scores from live market data (like backtest system)
+      await this.logger.info('SIGNALS', 'Calculating real-time Glicko ratings from live market data');
+      console.log('📊 Calculating real-time Glicko ratings from live market data (no database dependency)...');
+      ratings = await this.calculateRealTimeRatings();
 
       if (ratings.length === 0) {
         await this.logger.warn('SIGNALS', 'No ratings data available for signal generation');
@@ -275,11 +264,25 @@ export class TradingEngine extends EventEmitter {
         }
       }
       
+      // STEP 2.5: Ensure sufficient Z-score history for proper moving average calculation
+      for (const rating of ratings) {
+        const tradingSymbol = `${rating.symbol}USDT`;
+        const params = this.getParametersForSymbol(tradingSymbol);
+        const movingAveragesPeriod = params.movingAverages;
+        
+        // Only pre-populate history for symbols that can actually trade
+        if (this.state.parameterSets.has(tradingSymbol)) {
+          await this.ensureZScoreHistory(rating.symbol, movingAveragesPeriod, ratings);
+        }
+      }
+      
       // STEP 3: Calculate moving averages of Z-scores and generate signals
       const allSignals: ZScoreSignal[] = [];
+      const tradingSymbolData: any[] = [];
+      const monitoringSymbolData: any[] = [];
       
-      console.log(`📊 Processing ${ratings.length} coins for moving average Z-score calculations`);
-      console.log(`🎯 Trading enabled for ${this.state.parameterSets.size} parameter set symbols: ${Array.from(this.state.parameterSets.keys()).join(', ')}`);
+      console.log(`\n📊 MARKET OVERVIEW - Mean Glicko Rating: ${meanRating.toFixed(1)} across ${ratings.length} coins`);
+      console.log(`   Cross-coin statistics: σ=${stdDevRating.toFixed(1)}`);
       
       for (const rating of ratings) {
         const tradingSymbol = `${rating.symbol}USDT`;
@@ -299,6 +302,19 @@ export class TradingEngine extends EventEmitter {
           movingAverageZScore = recentZScores.reduce((sum, h) => sum + h.zScore, 0) / recentZScores.length;
         }
         
+        // Emit z-score data for database storage
+        const isEnabledForTrading = this.state.parameterSets.has(tradingSymbol);
+        this.emit('zScoreCalculated', {
+          symbol: tradingSymbol,
+          timestamp: new Date(),
+          zScore: currentZScore,
+          rating: ratingValue,
+          movingAverageZScore: movingAverageZScore,
+          zScoreThreshold: params.zScoreThreshold,
+          movingAveragesPeriod: movingAveragesPeriod,
+          isEnabledForTrading: isEnabledForTrading
+        });
+        
         // Store current z-score for ALL symbols (needed for reversal detection)
         this.previousZScores.set(tradingSymbol, movingAverageZScore);
         
@@ -306,7 +322,23 @@ export class TradingEngine extends EventEmitter {
         const isInParameterSet = this.state.parameterSets.has(tradingSymbol);
         const threshold = isInParameterSet ? params.zScoreThreshold : this.config.zScoreThreshold;
         
-        console.log(`📊 [${tradingSymbol}] Current Z: ${currentZScore.toFixed(3)}, MA Z-score: ${movingAverageZScore.toFixed(3)} (${movingAveragesPeriod}), Threshold: ±${threshold}, Rating: ${ratingValue.toFixed(0)}, History: ${history.length}${!isInParameterSet ? ' (monitoring only)' : ' (trading enabled)'}`);
+        // Collect data for organized logging
+        const symbolData = {
+          symbol: tradingSymbol,
+          currentZScore,
+          movingAverageZScore,
+          threshold,
+          ratingValue,
+          movingAveragesPeriod,
+          historyLength: history.length,
+          isTrading: isInParameterSet
+        };
+        
+        if (isInParameterSet) {
+          tradingSymbolData.push(symbolData);
+        } else {
+          monitoringSymbolData.push(symbolData);
+        }
         
         await this.logger.info('Z_SCORE', `Z-score calculated for ${tradingSymbol}`, {
           currentZScore,
@@ -334,8 +366,34 @@ export class TradingEngine extends EventEmitter {
             zScore: movingAverageZScore,
             signal: signal as 'BUY' | 'SELL'
           });
-        } else if (!isInParameterSet) {
-          console.log(`📊 [${tradingSymbol}] MA Z-score: ${movingAverageZScore.toFixed(3)} (monitoring only - no trading)`);
+        }
+      }
+      
+      // Display organized trading symbols information
+      if (tradingSymbolData.length > 0) {
+        console.log(`\n🎯 TRADING SYMBOLS:`);
+        tradingSymbolData.forEach(data => {
+          const currentZDisplay = data.currentZScore > 0 ? `+${data.currentZScore.toFixed(3)}` : data.currentZScore.toFixed(3);
+          const maZDisplay = data.movingAverageZScore > 0 ? `+${data.movingAverageZScore.toFixed(3)}` : data.movingAverageZScore.toFixed(3);
+          const historyStatus = data.historyLength >= data.movingAveragesPeriod ? `${data.movingAveragesPeriod} periods)` : `${data.historyLength}/${data.movingAveragesPeriod} periods)`;
+          
+          console.log(`   [${data.symbol}] Current Z: ${currentZDisplay} | MA Z-score: ${maZDisplay} (${historyStatus} | Threshold: ±${data.threshold} | Rating: ${data.ratingValue.toFixed(0)} | TRADING ENABLED`);
+        });
+      }
+      
+      // Display monitoring symbols in a compact format
+      if (monitoringSymbolData.length > 0) {
+        console.log(`\n📊 MONITORING SYMBOLS:`);
+        const monitoringLines: string[] = [];
+        monitoringSymbolData.forEach(data => {
+          const maZDisplay = data.movingAverageZScore > 0 ? `+${data.movingAverageZScore.toFixed(3)}` : data.movingAverageZScore.toFixed(3);
+          monitoringLines.push(`[${data.symbol}] MA Z: ${maZDisplay}`);
+        });
+        
+        // Display monitoring symbols in rows of 3
+        for (let i = 0; i < monitoringLines.length; i += 3) {
+          const row = monitoringLines.slice(i, i + 3).join(' | ');
+          console.log(`   ${row}`);
         }
       }
 
@@ -487,9 +545,12 @@ export class TradingEngine extends EventEmitter {
           entryPrice: currentPrice,
           quantity,
           entryTime: new Date(),
-          ocoOrderId: ocoOrder.orderListId?.toString(),
+          buyOrderId: buyOrder.orderId?.toString() || '',
+          ocoOrderId: ocoOrder.orderListId?.toString() || '',
           takeProfitOrderId: ocoOrder.orders?.find((o: any) => o.type === 'LIMIT')?.orderId?.toString(),
           stopLossOrderId: ocoOrder.orders?.find((o: any) => o.type === 'STOP_LOSS_LIMIT')?.orderId?.toString(),
+          takeProfitPrice: Number(takeProfitPrice),
+          stopLossPrice: Number(stopLossPrice),
           zScoreThreshold: params.zScoreThreshold,
           parameters: params
         };
@@ -562,6 +623,10 @@ export class TradingEngine extends EventEmitter {
               
               // Remove position from tracking
               this.state.activePositions.delete(symbol);
+              
+              // Release allocated funds
+              this.allocationManager.releaseFunds(symbol);
+              
               this.state.successfulTrades++;
               this.emit('zScoreReversal', { symbol, position, sellOrder });
               
@@ -583,6 +648,10 @@ export class TradingEngine extends EventEmitter {
             });
             console.log(`PAPER TRADE: Market sell ${symbol} due to Z-score reversal (z=${currentZScore.toFixed(2)})`);
             this.state.activePositions.delete(symbol);
+            
+            // Release allocated funds (in case paper trading was mixed with live)
+            this.allocationManager.releaseFunds(symbol);
+            
             this.emit('paperTrade', { 
               symbol, 
               signal: 'SELL', 
@@ -629,47 +698,38 @@ export class TradingEngine extends EventEmitter {
 
   async updateDailyPnL(): Promise<void> {
     try {
-      // Calculate P&L from today's trades
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-
-      const todayOrders = await this.prisma.productionOrders.findMany({
-        where: {
-          time: { gte: todayStart },
-          status: 'FILLED'
-        },
-        orderBy: { time: 'asc' }
-      });
-
-      // Simple P&L calculation (this could be more sophisticated)
+      // Calculate P&L from live tracked positions and paper positions (in-memory tracking)
       let dailyPnL = 0;
-      const trades = new Map();
 
-      for (const order of todayOrders) {
-        const key = order.symbol;
-        if (!trades.has(key)) {
-          trades.set(key, { buy: null, sells: [] });
+      // Calculate P&L from active positions (unrealized)
+      for (const [symbol, position] of this.state.activePositions) {
+        try {
+          const currentPrice = await this.binanceService.getCurrentPrice(symbol);
+          const unrealizedPnL = (currentPrice - position.entryPrice) * position.quantity;
+          dailyPnL += unrealizedPnL;
+        } catch (error) {
+          await this.logger.warn('PNL', `Failed to update P&L for position ${symbol}`, { error: (error as Error).message });
         }
+      }
 
-        const trade = trades.get(key);
-        const executedQty = parseFloat(order.executedQty.toString());
-        const price = parseFloat(order.price.toString());
-
-        if (order.side === 'BUY') {
-          if (!trade.buy) {
-            trade.buy = { quantity: executedQty, price };
-          }
-        } else if (order.side === 'SELL' && trade.buy) {
-          const profit = executedQty * (price - trade.buy.price);
-          dailyPnL += profit;
-          trade.sells.push({ quantity: executedQty, price, profit });
+      // Calculate P&L from paper positions (unrealized)
+      for (const [symbol, position] of this.paperPositions) {
+        if (position.unrealizedPnL !== undefined) {
+          dailyPnL += position.unrealizedPnL;
         }
       }
 
       this.state.dailyPnL = dailyPnL;
       this.emit('dailyPnLUpdated', dailyPnL);
 
+      await this.logger.info('PNL', 'Daily P&L updated', { 
+        dailyPnL, 
+        activePositions: this.state.activePositions.size,
+        paperPositions: this.paperPositions.size 
+      });
+
     } catch (error) {
+      await this.logger.error('PNL', 'Error updating daily P&L', { error: (error as Error).message });
       console.error('Error updating daily P&L:', error);
     }
   }
@@ -723,7 +783,7 @@ export class TradingEngine extends EventEmitter {
     };
   }
 
-  async getActivePositions(): Promise<any> {
+  async getActivePositionsStatus(): Promise<any> {
     return {
       binancePositions: Array.from(this.binanceService.getActivePositions().entries()),
       tradingEnginePositions: Array.from(this.state.activePositions.entries()),
@@ -1019,6 +1079,98 @@ export class TradingEngine extends EventEmitter {
   }
 
   /**
+   * Ensure sufficient Z-score history for moving average calculation
+   * If history is insufficient, pre-populate from historical klines intervals
+   */
+  private async ensureZScoreHistory(symbol: string, movingAveragesPeriod: number, allRatings: any[]): Promise<void> {
+    const tradingSymbol = `${symbol}USDT`;
+    
+    // Check if we already have sufficient history
+    const existingHistory = this.zScoreHistory.get(tradingSymbol) || [];
+    if (existingHistory.length >= movingAveragesPeriod) {
+      return; // Already have enough history
+    }
+    
+    try {
+      await this.logger.info('Z_SCORE_HISTORY', `Pre-populating Z-score history for ${symbol}`, {
+        currentHistoryLength: existingHistory.length,
+        requiredPeriods: movingAveragesPeriod
+      });
+      
+      // Calculate how many additional intervals we need
+      const periodsNeeded = movingAveragesPeriod - existingHistory.length + 5; // Extra for safety
+      
+      // Fetch historical klines
+      const klines = await this.binanceService.getKlines(
+        tradingSymbol,
+        '5m',
+        Date.now() - periodsNeeded * 5 * 60 * 1000,
+        undefined,
+        periodsNeeded
+      );
+      
+      if (!klines || klines.length < 2) {
+        console.warn(`⚠️ Insufficient historical klines for ${symbol}, using current Z-score for moving average`);
+        return;
+      }
+      
+      // Calculate Glicko ratings for each historical interval
+      const historicalRatings = await this.calculateGlickoRatingsForIntervals(tradingSymbol, klines, movingAveragesPeriod);
+      
+      if (historicalRatings.length === 0) {
+        console.warn(`⚠️ Failed to calculate historical Glicko ratings for ${symbol}`);
+        return;
+      }
+      
+      // For each historical rating interval, we need to calculate its Z-score
+      // relative to the market at that time. We'll approximate using current market composition
+      const historicalZScores: Array<{ timestamp: Date; zScore: number; rating: number }> = [];
+      
+      for (let i = 0; i < historicalRatings.length; i++) {
+        const historicalRating = historicalRatings[i];
+        
+        // Approximate Z-score calculation using current market mean/std as proxy
+        // This is a simplification - ideally we'd have the full market state for each interval
+        const currentMeanRating = allRatings.reduce((sum, r) => sum + parseFloat(r.rating.toString()), 0) / allRatings.length;
+        const ratingValues = allRatings.map(r => parseFloat(r.rating.toString()));
+        const variance = ratingValues.reduce((sum, rating) => sum + Math.pow(rating - currentMeanRating, 2), 0) / ratingValues.length;
+        const currentStdDevRating = Math.sqrt(variance);
+        
+        const approximateZScore = currentStdDevRating > 0 ? 
+          (historicalRating.rating - currentMeanRating) / currentStdDevRating : 0;
+        
+        historicalZScores.push({
+          timestamp: historicalRating.timestamp,
+          zScore: approximateZScore,
+          rating: historicalRating.rating
+        });
+      }
+      
+      // Initialize or update the Z-score history for this symbol
+      if (!this.zScoreHistory.has(tradingSymbol)) {
+        this.zScoreHistory.set(tradingSymbol, []);
+      }
+      
+      const history = this.zScoreHistory.get(tradingSymbol)!;
+      
+      // Add historical Z-scores to the beginning, keeping most recent data
+      const combinedHistory = [...historicalZScores.slice(-movingAveragesPeriod), ...existingHistory];
+      
+      // Keep only what we need
+      history.length = 0; // Clear existing
+      history.push(...combinedHistory.slice(-movingAveragesPeriod - 2)); // Keep a bit extra
+      
+      console.log(`📈 Pre-populated Z-score history for ${symbol}: ${history.length} intervals (needed: ${movingAveragesPeriod})`);
+      
+    } catch (error) {
+      console.error(`Error pre-populating Z-score history for ${symbol}:`, error);
+      await this.logger.error('Z_SCORE_HISTORY', `Failed to pre-populate history for ${symbol}`, {
+        error: (error as Error).message
+      });
+    }
+  }
+
+  /**
    * Execute a live trade with real Binance OCO orders
    */
   private async executeLiveTrade(signal: ZScoreSignal): Promise<void> {
@@ -1033,18 +1185,27 @@ export class TradingEngine extends EventEmitter {
           return;
         }
         
-        // Get account balance
-        const account = await this.binanceService.getAccountInfo();
-        const usdtBalance = account.balances.find((b: any) => b.asset === 'USDT');
-        const availableUsdt = parseFloat(usdtBalance?.free || '0');
-        
-        // Calculate position size
+        // Reserve funds using allocation manager
         const allocationPercent = params.allocationPercent || 10;
-        const allocationAmount = availableUsdt * (allocationPercent / 100);
-        const quantity = allocationAmount / currentPrice;
+        const reservation = await this.allocationManager.reserveFunds(
+          signal.symbol, 
+          allocationPercent, 
+          this.binanceService
+        );
+        
+        if (!reservation.success) {
+          console.log(`❌ Failed to reserve funds for ${signal.symbol}: ${reservation.reason}`);
+          await this.logger.warn('ALLOCATION', `Failed to reserve funds for ${signal.symbol}`, { 
+            reason: reservation.reason,
+            allocationPercent 
+          });
+          return;
+        }
+        
+        const allocationAmount = reservation.amount;
         
         if (allocationAmount < 10) {
-          console.log(`Insufficient balance for ${signal.symbol}: $${allocationAmount.toFixed(2)}`);
+          console.log(`Insufficient allocation for ${signal.symbol}: $${allocationAmount.toFixed(2)}`);
           return;
         }
         
@@ -1060,6 +1221,10 @@ export class TradingEngine extends EventEmitter {
         console.log(`   Order ID: ${buyOrder.orderId}`);
         console.log(`   Quantity: ${buyOrder.executedQty}`);
         console.log(`   Average Price: $${buyOrder.cummulativeQuoteQty / buyOrder.executedQty}`);
+        console.log(`   Allocated: $${allocationAmount.toFixed(2)} (${allocationPercent}%)`);
+        
+        // Update reservation with order ID
+        this.allocationManager.updateReservation(signal.symbol, buyOrder.orderId.toString());
         
         // Step 2: Immediately place OCO sell order with the executed quantity
         const executedQuantity = parseFloat(buyOrder.executedQty);
@@ -1333,28 +1498,61 @@ export class TradingEngine extends EventEmitter {
       // Stop the trading engine
       await this.stop();
       
-      // Cancel all open orders
-      const openOrders = await this.prisma.productionOrders.findMany({
-        where: {
-          status: { in: ['NEW', 'PARTIALLY_FILLED'] }
-        }
-      });
-
-      for (const order of openOrders) {
+      // Cancel all tracked active positions' OCO orders
+      for (const [symbol, position] of this.state.activePositions) {
         try {
-          await this.binanceService.cancelOrder(order.symbol, order.orderId);
+          if (position.ocoOrderId) {
+            await this.binanceService.cancelOrder(symbol, position.ocoOrderId);
+            console.log(`Cancelled OCO order for ${symbol}: ${position.ocoOrderId}`);
+          }
+          
+          // Also try to get and cancel any other open orders for this symbol from Binance directly
+          const openOrders = await this.binanceService.getOpenOrders(symbol);
+          for (const order of openOrders) {
+            try {
+              await this.binanceService.cancelOrder(symbol, order.orderId.toString());
+              console.log(`Cancelled open order for ${symbol}: ${order.orderId}`);
+            } catch (error) {
+              console.error(`Failed to cancel open order ${order.orderId} for ${symbol}:`, error);
+            }
+          }
         } catch (error) {
-          console.error(`Failed to cancel order ${order.orderId}:`, error);
+          console.error(`Failed to cancel orders for ${symbol}:`, error);
         }
       }
 
+      // Clear all active positions
+      this.state.activePositions.clear();
+      
+      // Clear paper positions
+      this.paperPositions.clear();
+      
+      // Clear all allocations
+      await this.clearAllAllocations();
+
       this.emit('emergencyStop');
-      console.log('Emergency stop completed');
+      console.log('Emergency stop completed - all orders cancelled and positions cleared');
 
     } catch (error) {
       console.error('Error during emergency stop:', error);
       this.emit('emergencyStopError', error);
     }
+  }
+
+  /**
+   * Get current allocation status for monitoring
+   */
+  getAllocationStatus(): any {
+    return this.allocationManager.getAllocationStatus();
+  }
+
+  /**
+   * Emergency clear all reservations
+   */
+  async clearAllAllocations(): Promise<void> {
+    console.warn('🚨 Emergency: Clearing all allocation reservations');
+    this.allocationManager.clearAllReservations();
+    await this.logger.warn('ALLOCATION', 'Emergency: Cleared all allocation reservations');
   }
 }
 

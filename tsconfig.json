@@ -5,7 +5,7 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "outDir": "./dist",
-    "rootDir": "./src/node-api",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -20,12 +20,14 @@
     "types": ["node", "jest"]
   },
   "include": [
-    "src/node-api/**/*",
-    "src/types/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "src/rust-core"
+    "src/rust-core",
+    "src/web-ui",
+    "src/pages",
+    "__test__"
   ]
 }

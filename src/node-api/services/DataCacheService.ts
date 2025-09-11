@@ -56,10 +56,10 @@ export class DataCacheService {
   private prisma: PrismaClient;
   
   // Multi-tier cache system
-  private hotCache: NodeCache; // For ultra-hot data (ratings, prices)
-  private warmCache: LRUCache<string, any>; // For medium-frequency data
-  private coldCache: Map<string, { data: any; timestamp: number; ttl: number }>; // For large datasets
-  private computedCache: LRUCache<string, ZScoreResult[]>; // For expensive calculations
+  private hotCache!: NodeCache; // For ultra-hot data (ratings, prices)
+  private warmCache!: LRUCache<string, any>; // For medium-frequency data
+  private coldCache!: Map<string, { data: any; timestamp: number; ttl: number }>; // For large datasets
+  private computedCache!: LRUCache<string, ZScoreResult[]>; // For expensive calculations
   
   // Cache statistics
   private stats = {

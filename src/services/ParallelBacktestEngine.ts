@@ -151,11 +151,17 @@ class ParallelBacktestEngine extends EventEmitter {
    * Create and initialize worker pool
    */
   private async createWorkerPool(): Promise<void> {
-    const workerScript = require.resolve('./BacktestWorker.js'); // Will be created next
+    // Use ts-node to compile TypeScript worker on the fly
+    const workerScript = `
+      const { register } = require('ts-node');
+      register();
+      require('./BacktestWorker.ts');
+    `;
     
     for (let i = 0; i < this.config.maxWorkers; i++) {
       try {
         const worker = new Worker(workerScript, {
+          eval: true,
           workerData: {
             workerId: i,
             memoryLimit: this.config.workerMemoryLimit,

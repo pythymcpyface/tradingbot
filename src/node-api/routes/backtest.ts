@@ -113,12 +113,13 @@ router.post('/run', async (req, res) => {
 
     // Convert to the format expected by Rust
     const glickoRatings = ratings.map(r => ({
+      id: r.id,
       symbol: r.symbol,
-      timestamp: r.timestamp.getTime(),
+      timestamp: r.timestamp,
       rating: parseFloat(r.rating.toString()),
-      rating_deviation: parseFloat(r.ratingDeviation.toString()),
+      ratingDeviation: parseFloat(r.ratingDeviation.toString()),
       volatility: parseFloat(r.volatility.toString()),
-      performance_score: parseFloat(r.performanceScore.toString())
+      performanceScore: parseFloat(r.performanceScore.toString())
     }));
 
     const config: BacktestConfig = {
@@ -147,8 +148,8 @@ router.post('/run', async (req, res) => {
           price: order.price,
           timestamp: new Date(order.timestamp),
           reason: order.reason as any,
-          profitLoss: order.profit_loss || null,
-          profitLossPercent: order.profit_loss_percent || null
+          profitLoss: order.profitLoss || null,
+          profitLossPercent: order.profitLossPercent || null
         }))
       });
     }
@@ -165,16 +166,16 @@ router.post('/run', async (req, res) => {
         stopLossPercent,
         startTime: new Date(startTime),
         endTime: new Date(endTime),
-        totalReturn: backtestResult.total_return,
-        annualizedReturn: backtestResult.annualized_return,
-        sharpeRatio: backtestResult.sharpe_ratio,
-        sortinoRatio: backtestResult.sortino_ratio,
-        alpha: backtestResult.alpha,
-        maxDrawdown: backtestResult.max_drawdown,
-        winRatio: backtestResult.win_ratio,
-        totalTrades: backtestResult.total_trades,
-        profitFactor: backtestResult.profit_factor,
-        avgTradeDuration: backtestResult.avg_trade_duration
+        totalReturn: backtestResult.metrics.totalReturn,
+        annualizedReturn: backtestResult.metrics.annualizedReturn,
+        sharpeRatio: backtestResult.metrics.sharpeRatio,
+        sortinoRatio: backtestResult.metrics.sortinoRatio,
+        alpha: backtestResult.metrics.alpha,
+        maxDrawdown: backtestResult.metrics.maxDrawdown,
+        winRatio: backtestResult.metrics.winRatio,
+        totalTrades: backtestResult.metrics.totalTrades,
+        profitFactor: backtestResult.metrics.profitFactor,
+        avgTradeDuration: backtestResult.metrics.avgTradeDuration
       }
     });
 
@@ -220,12 +221,13 @@ router.post('/windowed', async (req, res) => {
 
     // Convert to the format expected by Rust
     const glickoRatings = ratings.map(r => ({
+      id: r.id,
       symbol: r.symbol,
-      timestamp: r.timestamp.getTime(),
+      timestamp: r.timestamp,
       rating: parseFloat(r.rating.toString()),
-      rating_deviation: parseFloat(r.ratingDeviation.toString()),
+      ratingDeviation: parseFloat(r.ratingDeviation.toString()),
       volatility: parseFloat(r.volatility.toString()),
-      performance_score: parseFloat(r.performanceScore.toString())
+      performanceScore: parseFloat(r.performanceScore.toString())
     }));
 
     // Run windowed backtest

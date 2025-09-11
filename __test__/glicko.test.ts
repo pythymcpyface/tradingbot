@@ -113,9 +113,10 @@ describe('Glicko-2 Calculations', () => {
     });
 
     it('should handle edge cases in price data', () => {
-      // Test with zero volume
+      // Test with zero volume - price up but no volume data should still register as price up with low confidence
       const zeroVolumeScore = calculateHybridScore(100, 105, 0, 0);
-      expect(zeroVolumeScore.score).toBe(0.5); // Should be neutral when no volume
+      expect(zeroVolumeScore.score).toBe(0.75); // Price up but no volume data = low confidence win
+      expect(zeroVolumeScore.confidence).toBe('LOW');
       
       // Test with equal prices
       const equalPriceScore = calculateHybridScore(100, 100, 1000, 500);

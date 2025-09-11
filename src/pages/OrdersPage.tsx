@@ -24,18 +24,18 @@ import {
   Card,
   CardContent,
   Grid,
-  // Divider
+  Divider
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   Download as DownloadIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
-  // SwapHoriz as SwapHorizIcon
+  SwapHoriz as SwapHorizIcon
 } from '@mui/icons-material';
-// import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-// import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-// import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { api } from '../utils/apiClient';
 
 interface Order {
@@ -207,6 +207,7 @@ const OrdersPage: React.FC = () => {
   };
 
   return (
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
           <Typography variant="h4" component="h1" fontWeight="bold">
@@ -352,25 +353,19 @@ const OrdersPage: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                type="date"
+              <DatePicker
                 label="Start Date"
-                value={startDate ? startDate.toISOString().split('T')[0] : ''}
-                onChange={(e) => setStartDate(e.target.value ? new Date(e.target.value) : null)}
-                size="small"
-                fullWidth
-                InputLabelProps={{ shrink: true }}
+                value={startDate}
+                onChange={(newValue) => setStartDate(newValue)}
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                type="date"
+              <DatePicker
                 label="End Date"
-                value={endDate ? endDate.toISOString().split('T')[0] : ''}
-                onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)}
-                size="small"
-                fullWidth
-                InputLabelProps={{ shrink: true }}
+                value={endDate}
+                onChange={(newValue) => setEndDate(newValue)}
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
@@ -501,6 +496,7 @@ const OrdersPage: React.FC = () => {
           />
         </Paper>
       </Box>
+    </LocalizationProvider>
   );
 };
 

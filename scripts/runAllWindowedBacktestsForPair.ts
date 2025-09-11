@@ -1565,7 +1565,7 @@ function parseArguments(): ParsedArguments {
     console.error('');
     console.error('  # Custom parameter ranges:');
     console.error('  npm run runAllWindowedBacktestsForPair ETH USDT --zscores=2.0,2.5,3.0 --profits=4.0,5.0,6.0 --stops=2.0,2.5,3.0');
-    console.error('  npm run runAllWindowedBacktestsForPair BTC USDT 6 --ma=20 --zscores=1.5,2.0,2.5');
+    console.error('  npm run runAllWindowedBacktestsForPair BTC USDT 6 --mas=20 --zscores=1.5,2.0,2.5');
     console.error('');
     console.error('  # Generate individual windowed backtest charts:');
     console.error('  npm run runAllWindowedBacktestsForPair ETH USDT --charts');
@@ -1581,7 +1581,7 @@ function parseArguments(): ParsedArguments {
     console.error('  --zscores=X,Y,Z: Comma-separated Z-score thresholds');
     console.error('  --profits=X,Y,Z: Comma-separated profit percentages');
     console.error('  --stops=X,Y,Z: Comma-separated stop loss percentages');
-    console.error('  --ma=N: Moving average period (default: 10)');
+    console.error('  --ma=N or --mas=N: Moving average period (default: 10)');
     console.error('  --charts: Generate individual windowed backtest charts for best performing parameters');
     console.error('');
     console.error('Current .env defaults:');
@@ -1650,8 +1650,8 @@ function parseArguments(): ParsedArguments {
       .filter(v => !isNaN(v));
   }
 
-  if (paramFlags.ma) {
-    const ma = parseInt(paramFlags.ma);
+  if (paramFlags.ma || paramFlags.mas) {
+    const ma = parseInt(paramFlags.ma || paramFlags.mas);
     if (!isNaN(ma)) {
       parameterRanges.movingAverages = ma;
     }

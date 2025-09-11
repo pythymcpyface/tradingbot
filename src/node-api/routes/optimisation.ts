@@ -30,8 +30,8 @@ router.get('/', async (req, res) => {
     ];
     
     const orderBy = validSortFields.includes(sortBy as string) 
-      ? { [sortBy as string]: sortOrder === 'asc' ? 'asc' : 'desc' }
-      : { totalReturn: 'desc' };
+      ? { [sortBy as string]: sortOrder === 'asc' ? 'asc' : 'desc' as const }
+      : { totalReturn: 'desc' as const };
 
     const [results, total] = await Promise.all([
       prisma.optimizationResults.findMany({
@@ -168,7 +168,7 @@ router.get('/stats', async (req, res) => {
     });
 
     // Get parameter distribution statistics
-    const parameterStats = await prisma.$queryRaw`
+    const parameterStats = await prisma.$queryRaw<any[]>`
       SELECT 
         AVG("zScoreThreshold") as avg_z_score,
         AVG("movingAverages") as avg_moving_averages,

@@ -13,7 +13,7 @@ import {
   Dashboard as DashboardIcon,
   TrendingUp as TradingIcon,
   Assessment as BacktestIcon,
-  Tune as TuneIcon,
+  TuneIcon,
   ShowChart as GlickoIcon,
   Receipt as OrdersIcon,
   AccountCircle,

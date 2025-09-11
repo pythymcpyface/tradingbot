@@ -215,18 +215,20 @@ router.post('/calculate', async (req, res) => {
 
     // Convert to format expected by Rust core
     const klinesData = klines.map(k => ({
+      id: k.id,
       symbol: k.symbol,
-      open_time: k.openTime.getTime(),
-      close_time: k.closeTime.getTime(),
+      openTime: k.openTime,
+      closeTime: k.closeTime,
       open: parseFloat(k.open.toString()),
       high: parseFloat(k.high.toString()),
       low: parseFloat(k.low.toString()),
       close: parseFloat(k.close.toString()),
       volume: parseFloat(k.volume.toString()),
-      quote_asset_volume: parseFloat(k.quoteAssetVolume.toString()),
-      number_of_trades: k.numberOfTrades,
-      taker_buy_base_asset_volume: parseFloat(k.takerBuyBaseAssetVolume.toString()),
-      taker_buy_quote_asset_volume: parseFloat(k.takerBuyQuoteAssetVolume.toString())
+      quoteAssetVolume: parseFloat(k.quoteAssetVolume.toString()),
+      numberOfTrades: k.numberOfTrades,
+      takerBuyBaseAssetVolume: parseFloat(k.takerBuyBaseAssetVolume.toString()),
+      takerBuyQuoteAssetVolume: parseFloat(k.takerBuyQuoteAssetVolume.toString()),
+      ignore: parseInt(k.ignore?.toString() || '0')
     }));
 
     // Calculate Glicko ratings using Rust core
@@ -251,9 +253,9 @@ router.post('/calculate', async (req, res) => {
         symbol: r.symbol,
         timestamp: new Date(r.timestamp),
         rating: r.rating,
-        ratingDeviation: r.rating_deviation,
+        ratingDeviation: r.ratingDeviation,
         volatility: r.volatility,
-        performanceScore: r.performance_score
+        performanceScore: r.performanceScore
       }))
     });
 

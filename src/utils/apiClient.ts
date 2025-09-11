@@ -100,7 +100,6 @@ export const api = {
     stop: () => apiClient.post('/api/trading/stop'),
     emergencyStop: () => apiClient.post('/api/trading/emergency-stop'),
     getSignals: (params?: any) => apiClient.get('/api/trading/signals', { params }),
-    getZScores: (params?: any) => apiClient.get('/api/trading/z-scores', { params }),
     getCurrentPrices: (symbols?: string[]) => 
       apiClient.get('/api/trading/prices', { 
         params: symbols ? { symbols: symbols.join(',') } : undefined 

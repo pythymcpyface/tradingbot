@@ -49,6 +49,25 @@ model GlickoRatings {
   @@map("glicko_ratings")
 }
 
+model ZScoreHistory {
+  id                   String   @id @default(cuid())
+  symbol               String
+  timestamp            DateTime
+  zScore               Decimal  @db.Decimal(10, 6)
+  rating               Decimal  @db.Decimal(10, 4)
+  movingAverageZScore  Decimal? @db.Decimal(10, 6)
+  zScoreThreshold      Decimal  @db.Decimal(5, 2)
+  movingAveragesPeriod Int
+  isEnabledForTrading  Boolean  @default(false)
+  createdAt            DateTime @default(now())
+
+  @@unique([symbol, timestamp])
+  @@index([symbol, timestamp])
+  @@index([timestamp])
+  @@index([isEnabledForTrading])
+  @@map("zscore_history")
+}
+
 model ProductionOrders {
   id                   String   @id @default(cuid())
   orderId              String   @unique

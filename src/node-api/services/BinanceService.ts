@@ -1,6 +1,5 @@
 import Binance from 'binance-api-node';
 import { EventEmitter } from 'events';
-import { PrismaClient } from '@prisma/client';
 import { ZScoreSignal, TradingPair } from '../../types';
 
 export interface BinanceConfig {
@@ -24,15 +23,13 @@ export interface OrderRequest {
 
 export class BinanceService extends EventEmitter {
   private client: any;
-  private prisma: PrismaClient;
   private isInitialized: boolean = false;
   private activePositions: Map<string, any> = new Map();
   private priceSubscriptions: Map<string, any> = new Map();
   private paperTrading: boolean = false;
 
-  constructor(config: BinanceConfig, prisma: PrismaClient) {
+  constructor(config: BinanceConfig) {
     super();
-    this.prisma = prisma;
     this.paperTrading = config.paperTrading || false;
     
     this.client = Binance({
@@ -267,9 +264,6 @@ export class BinanceService extends EventEmitter {
           throw new Error(`Unsupported order type: ${orderRequest.type}`);
       }
       
-      // Save to database
-      await this.saveOrderToDatabase(order);
-      
       // Update active positions
       await this.updateActivePositions();
       
@@ -366,7 +360,6 @@ export class BinanceService extends EventEmitter {
         stopLimitTimeInForce: 'GTC'
       });
       
-      await this.saveOrderToDatabase(order);
       this.emit('ocoOrderPlaced', order);
       
       return order;
@@ -381,15 +374,6 @@ export class BinanceService extends EventEmitter {
       const result = await this.client.cancelOrder({
         symbol,
         orderId: parseInt(orderId)
-      });
-      
-      // Update database
-      await this.prisma.productionOrders.update({
-        where: { orderId },
-        data: {
-          status: 'CANCELED',
-          updateTime: new Date()
-        }
       });
       
       this.emit('orderCanceled', result);
@@ -454,58 +438,6 @@ export class BinanceService extends EventEmitter {
     console.log('Stopped price streaming');
   }
 
-  private async saveOrderToDatabase(order: any): Promise<void> {
-    try {
-      // Handle both regular orders and OCO orders
-      if (order.orderListId) {
-        // OCO order - save each order in the list
-        for (const orderReport of order.orderReports) {
-          await this.prisma.productionOrders.create({
-            data: {
-              orderId: orderReport.orderId.toString(),
-              symbol: orderReport.symbol,
-              side: orderReport.side,
-              type: orderReport.type,
-              quantity: parseFloat(orderReport.origQty),
-              price: parseFloat(orderReport.price || '0'),
-              stopPrice: parseFloat(orderReport.stopPrice || '0') || null,
-              timeInForce: orderReport.timeInForce,
-              status: orderReport.status,
-              executedQty: parseFloat(orderReport.executedQty),
-              cummulativeQuoteQty: parseFloat(orderReport.cummulativeQuoteQty),
-              time: new Date(order.transactionTime),
-              updateTime: new Date(order.transactionTime),
-              isWorking: orderReport.status === 'NEW',
-              origQuoteOrderQty: parseFloat(orderReport.origQuoteOrderQty || '0')
-            }
-          });
-        }
-      } else {
-        // Regular order
-        await this.prisma.productionOrders.create({
-          data: {
-            orderId: order.orderId.toString(),
-            symbol: order.symbol,
-            side: order.side,
-            type: order.type,
-            quantity: parseFloat(order.origQty),
-            price: parseFloat(order.price || '0'),
-            stopPrice: parseFloat(order.stopPrice || '0') || null,
-            timeInForce: order.timeInForce || 'GTC',
-            status: order.status,
-            executedQty: parseFloat(order.executedQty),
-            cummulativeQuoteQty: parseFloat(order.cummulativeQuoteQty),
-            time: new Date(order.transactTime),
-            updateTime: new Date(order.transactTime),
-            isWorking: order.status === 'NEW',
-            origQuoteOrderQty: parseFloat(order.origQuoteOrderQty || '0')
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error saving order to database:', error);
-    }
-  }
 
   private async updateActivePositions(): Promise<void> {
     try {
@@ -513,6 +445,25 @@ export class BinanceService extends EventEmitter {
       this.emit('positionsUpdated', this.activePositions);
     } catch (error) {
       console.error('Error updating active positions:', error);
+    }
+  }
+
+  async getOpenOrders(symbol?: string): Promise<any[]> {
+    try {
+      if (this.paperTrading) {
+        // Return empty array for paper trading since we don't track actual orders
+        return [];
+      }
+      
+      const params: any = {};
+      if (symbol) {
+        params.symbol = symbol;
+      }
+      
+      return await this.client.openOrders(params);
+    } catch (error) {
+      console.error('Error getting open orders:', error);
+      throw error;
     }
   }
 
