@@ -227,10 +227,10 @@ const OptimizationPage: React.FC = () => {
       }
 
       const params = {
-        page: page + 1,
+        offset: page * rowsPerPage,
         limit: rowsPerPage,
-        sort: sortBy,
-        order: sortOrder,
+        sortBy: sortBy,
+        sortOrder: sortOrder,
         ...(baseAsset && { baseAsset }),
         ...(quoteAsset && { quoteAsset }),
         ...(minReturn && { minReturn: parseFloat(minReturn) }),
@@ -244,16 +244,29 @@ const OptimizationPage: React.FC = () => {
       // Fetch results first
       const resultsResponse = await api.optimization.getAll(params);
       const rawResults = resultsResponse.data.results || [];
+      const paginationInfo = resultsResponse.data.pagination || { total: 0 };
       
       // Deduplicate results by parameter combination
       const deduplicatedResults = deduplicateResults(rawResults);
       
-      // Extract unique symbols for dropdown
-      const uniqueSymbols = extractUniqueSymbols(deduplicatedResults);
-      setAvailableSymbols(uniqueSymbols);
+      // Extract unique symbols for dropdown - but only if we don't have symbols yet
+      if (availableSymbols.length === 0) {
+        // Fetch all symbols by getting a small sample without pagination
+        try {
+          const symbolResponse = await api.optimization.getAll({ limit: 1000, offset: 0 });
+          const allResults = symbolResponse.data.results || [];
+          const uniqueSymbols = extractUniqueSymbols(allResults);
+          setAvailableSymbols(uniqueSymbols);
+        } catch (err) {
+          console.warn('Failed to fetch symbols, using current results');
+          const uniqueSymbols = extractUniqueSymbols(deduplicatedResults);
+          setAvailableSymbols(uniqueSymbols);
+        }
+      }
       
       setResults(deduplicatedResults);
-      setTotalResults(deduplicatedResults.length);
+      // Use the API's total count, not the deduplicated count
+      setTotalResults(paginationInfo.total);
 
       // Try to fetch stats and correlation, but don't fail if they error
       try {
@@ -294,7 +307,7 @@ const OptimizationPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, sortBy, sortOrder, symbolFilter, minReturn, minSharpe, zScoreFilter, movingAveragesFilter, profitPercentFilter, stopLossPercentFilter]);
+  }, [page, rowsPerPage, sortBy, sortOrder, symbolFilter, minReturn, minSharpe, zScoreFilter, movingAveragesFilter, profitPercentFilter, stopLossPercentFilter, availableSymbols.length]);
 
   useEffect(() => {
     fetchOptimizationData();

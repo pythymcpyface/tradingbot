@@ -296,7 +296,10 @@ const Dashboard: React.FC = () => {
       </Grid>
 
       {/* Portfolio Positions */}
-      {portfolio && portfolio.positions.length > 0 && (
+      {portfolio && portfolio.positions.some(position => {
+        const currentValue = position.quantity * (position.currentPrice || position.avgPrice || 0);
+        return currentValue > 10 && position.symbol !== 'USDTUSDT';
+      }) && (
         <Grid container spacing={3} sx={{ mb: 3 }}>
           <Grid item xs={12}>
             <Paper sx={{ p: 2 }}>
@@ -304,7 +307,13 @@ const Dashboard: React.FC = () => {
                 Active Positions
               </Typography>
               <Grid container spacing={2}>
-                {portfolio.positions.map((position, index) => (
+                {portfolio.positions
+                  .filter(position => {
+                    // Only show positions with significant value (more than $10 worth)
+                    const currentValue = position.quantity * (position.currentPrice || position.avgPrice || 0);
+                    return currentValue > 10 && position.symbol !== 'USDTUSDT'; // Exclude USDT cash balance
+                  })
+                  .map((position, index) => (
                   <Grid item xs={12} sm={6} md={4} key={index}>
                     <Card variant="outlined">
                       <CardContent>
@@ -359,7 +368,10 @@ const Dashboard: React.FC = () => {
                 Active Positions
               </Typography>
               <Typography variant="h6">
-                {tradingData?.activePositions || 0}
+                {portfolio ? portfolio.positions.filter(position => {
+                  const currentValue = position.quantity * (position.currentPrice || position.avgPrice || 0);
+                  return currentValue > 10 && position.symbol !== 'USDTUSDT';
+                }).length : 0}
               </Typography>
             </CardContent>
           </Card>
