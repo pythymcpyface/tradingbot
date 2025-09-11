@@ -119,6 +119,18 @@ interface CorrelationData {
   winRatio: number;
 }
 
+// Helper function to extract unique symbols from results
+const extractUniqueSymbols = (results: OptimizationResult[]): string[] => {
+  const symbolsSet = new Set<string>();
+  
+  results.forEach(result => {
+    const symbol = `${result.baseAsset}${result.quoteAsset}`;
+    symbolsSet.add(symbol);
+  });
+  
+  return Array.from(symbolsSet).sort();
+};
+
 // Helper function to deduplicate optimization results
 const deduplicateResults = (results: OptimizationResult[]): OptimizationResult[] => {
   const uniqueResults = new Map<string, OptimizationResult>();
@@ -160,6 +172,7 @@ const OptimizationPage: React.FC = () => {
   const [results, setResults] = useState<OptimizationResult[]>([]);
   const [stats, setStats] = useState<OptimizationStats | null>(null);
   const [correlationData, setCorrelationData] = useState<CorrelationData[]>([]);
+  const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -191,16 +204,25 @@ const OptimizationPage: React.FC = () => {
       let baseAsset = '';
       let quoteAsset = '';
       if (symbolFilter) {
-        // Handle common patterns like "BTC", "BTCUSDT", "ETH", "ETHUSDT"
-        if (symbolFilter.toUpperCase().includes('USDT')) {
-          const parts = symbolFilter.toUpperCase().split('USDT');
-          if (parts.length === 2 && parts[1] === '') {
-            baseAsset = parts[0];
-            quoteAsset = 'USDT';
-          }
-        } else {
-          // If no USDT specified, assume they want all pairs with this base asset
-          baseAsset = symbolFilter.toUpperCase();
+        // Symbol from dropdown is exact format like "BTCUSDT"
+        // Extract baseAsset and quoteAsset by splitting on known quote assets
+        const symbol = symbolFilter.toUpperCase();
+        if (symbol.endsWith('USDT')) {
+          baseAsset = symbol.replace('USDT', '');
+          quoteAsset = 'USDT';
+        } else if (symbol.endsWith('BTC')) {
+          baseAsset = symbol.replace('BTC', '');
+          quoteAsset = 'BTC';
+        } else if (symbol.endsWith('ETH')) {
+          baseAsset = symbol.replace('ETH', '');
+          quoteAsset = 'ETH';
+        } else if (symbol.endsWith('BNB')) {
+          baseAsset = symbol.replace('BNB', '');
+          quoteAsset = 'BNB';
+        }
+        // If no known quote asset found, treat the whole string as baseAsset
+        if (!quoteAsset) {
+          baseAsset = symbol;
         }
       }
 
@@ -225,6 +247,10 @@ const OptimizationPage: React.FC = () => {
       
       // Deduplicate results by parameter combination
       const deduplicatedResults = deduplicateResults(rawResults);
+      
+      // Extract unique symbols for dropdown
+      const uniqueSymbols = extractUniqueSymbols(deduplicatedResults);
+      setAvailableSymbols(uniqueSymbols);
       
       setResults(deduplicatedResults);
       setTotalResults(deduplicatedResults.length);
@@ -486,14 +512,23 @@ const OptimizationPage: React.FC = () => {
           <Box sx={{ p: 2, borderBottom: '1px solid #eee' }}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} sm={6} md={3}>
-                <TextField
-                  label="Symbol Filter"
-                  value={symbolFilter}
-                  onChange={(e) => setSymbolFilter(e.target.value)}
-                  size="small"
-                  fullWidth
-                  placeholder="e.g., BTC, ETH"
-                />
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Symbol Filter</InputLabel>
+                  <Select
+                    value={symbolFilter}
+                    label="Symbol Filter"
+                    onChange={(e) => setSymbolFilter(e.target.value)}
+                  >
+                    <MenuItem value="">
+                      <em>All Symbols</em>
+                    </MenuItem>
+                    {availableSymbols.map((symbol) => (
+                      <MenuItem key={symbol} value={symbol}>
+                        {symbol}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} sm={6} md={2}>
                 <FormControl size="small" fullWidth>
