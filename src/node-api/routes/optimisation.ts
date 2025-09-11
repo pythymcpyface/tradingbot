@@ -16,12 +16,38 @@ router.get('/', async (req, res) => {
       sortBy = 'totalReturn',
       sortOrder = 'desc',
       limit = '50', 
-      offset = '0' 
+      offset = '0',
+      minReturn,
+      minSharpe,
+      zScoreThreshold,
+      movingAverages,
+      profitPercent,
+      stopLossPercent
     } = req.query;
     
     const where: any = {};
     if (baseAsset) where.baseAsset = baseAsset;
     if (quoteAsset) where.quoteAsset = quoteAsset;
+    
+    // Parameter filters
+    if (minReturn) {
+      where.totalReturn = { gte: parseFloat(minReturn as string) };
+    }
+    if (minSharpe) {
+      where.sharpeRatio = { gte: parseFloat(minSharpe as string) };
+    }
+    if (zScoreThreshold) {
+      where.zScoreThreshold = parseFloat(zScoreThreshold as string);
+    }
+    if (movingAverages) {
+      where.movingAverages = parseInt(movingAverages as string);
+    }
+    if (profitPercent) {
+      where.profitPercent = parseFloat(profitPercent as string);
+    }
+    if (stopLossPercent) {
+      where.stopLossPercent = parseFloat(stopLossPercent as string);
+    }
 
     // Validate sort field
     const validSortFields = [
