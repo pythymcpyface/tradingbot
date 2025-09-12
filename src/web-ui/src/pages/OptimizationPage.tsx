@@ -523,8 +523,9 @@ const OptimizationPage: React.FC = () => {
         <Paper>
           {/* Filters */}
           <Box sx={{ p: 2, borderBottom: '1px solid #eee' }}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={6} md={3}>
+            {/* Basic Filters - First Row */}
+            <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={6} lg={2}>
                 <FormControl size="small" fullWidth>
                   <InputLabel>Symbol Filter</InputLabel>
                   <Select
@@ -543,7 +544,7 @@ const OptimizationPage: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6} md={2}>
+              <Grid item xs={12} sm={6} lg={2}>
                 <FormControl size="small" fullWidth>
                   <InputLabel>Sort By</InputLabel>
                   <Select
@@ -560,7 +561,7 @@ const OptimizationPage: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6} md={2}>
+              <Grid item xs={12} sm={6} lg={2}>
                 <FormControl size="small" fullWidth>
                   <InputLabel>Order</InputLabel>
                   <Select
@@ -573,7 +574,7 @@ const OptimizationPage: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6} md={2}>
+              <Grid item xs={12} sm={6} lg={3}>
                 <TextField
                   label="Min Return %"
                   value={minReturn}
@@ -583,7 +584,7 @@ const OptimizationPage: React.FC = () => {
                   type="number"
                 />
               </Grid>
-              <Grid item xs={12} sm={6} md={2}>
+              <Grid item xs={12} sm={6} lg={3}>
                 <TextField
                   label="Min Sharpe"
                   value={minSharpe}
@@ -596,8 +597,8 @@ const OptimizationPage: React.FC = () => {
             </Grid>
             
             {/* Parameter Filters - Second Row */}
-            <Grid container spacing={2} alignItems="center" sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6} md={3}>
+            <Grid container spacing={2} alignItems="flex-start">
+              <Grid item xs={12} sm={6} lg={3}>
                 <TextField
                   label="Z-Score Threshold"
                   value={zScoreFilter}
@@ -609,7 +610,7 @@ const OptimizationPage: React.FC = () => {
                   helperText="Minimum z-score threshold"
                 />
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={12} sm={6} lg={3}>
                 <TextField
                   label="Moving Averages"
                   value={movingAveragesFilter}
@@ -621,7 +622,7 @@ const OptimizationPage: React.FC = () => {
                   helperText="MA period in days"
                 />
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={12} sm={6} lg={3}>
                 <TextField
                   label="Min Profit %"
                   value={profitPercentFilter}
@@ -633,7 +634,7 @@ const OptimizationPage: React.FC = () => {
                   helperText="Minimum take profit %"
                 />
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={12} sm={6} lg={3}>
                 <TextField
                   label="Max Stop Loss %"
                   value={stopLossPercentFilter}

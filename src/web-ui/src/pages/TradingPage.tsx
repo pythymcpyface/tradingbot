@@ -583,14 +583,12 @@ const TradingPage: React.FC = () => {
       </Grid>
 
       {/* Server Logs */}
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <LogViewer 
-            maxHeight="500px"
-            autoRefresh={true}
-          />
-        </Grid>
-      </Grid>
+      <LogViewer 
+        title="Trading System Logs"
+        defaultExpanded={false}
+        maxHeight={500}
+        categories={['SIGNALS', 'Z_SCORE', 'RATINGS', 'ENGINE', 'PAPER_TRADE', 'SYSTEM']}
+      />
     </Box>
   );
 };
