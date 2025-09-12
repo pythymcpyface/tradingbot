@@ -149,6 +149,23 @@ export const api = {
       apiClient.get(`/api/glicko/ratings/${symbol}/history`, { params }),
   },
 
+  // Logs endpoints
+  logs: {
+    getRecent: (params?: any) => apiClient.get('/api/logs/recent', { params }),
+    getByCategory: (category: string, params?: any) => 
+      apiClient.get(`/api/logs/category/${category}`, { params }),
+    getByLevel: (level: string, params?: any) => 
+      apiClient.get(`/api/logs/level/${level}`, { params }),
+    getCategories: () => apiClient.get('/api/logs/categories'),
+    getStats: (params?: any) => apiClient.get('/api/logs/stats', { params }),
+    // Note: stream endpoint should be used with EventSource, not axios
+    getStreamUrl: (params?: any) => {
+      const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+      const searchParams = new URLSearchParams(params);
+      return `${baseURL}/api/logs/stream?${searchParams.toString()}`;
+    },
+  },
+
   // System endpoints
   system: {
     health: () => apiClient.get('/health'),

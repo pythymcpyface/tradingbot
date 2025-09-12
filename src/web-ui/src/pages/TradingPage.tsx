@@ -38,6 +38,7 @@ import {
 import 'chartjs-adapter-date-fns';
 import { Line } from 'react-chartjs-2';
 import { api } from '../utils/apiClient';
+import LogViewer from '../components/LogViewer';
 
 // Register Chart.js components
 ChartJS.register(
@@ -528,54 +529,68 @@ const TradingPage: React.FC = () => {
       </Grid>
 
       {/* Signals Table */}
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Current Trading Signals
-          </Typography>
-          
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Symbol</TableCell>
-                  <TableCell>Signal</TableCell>
-                  <TableCell align="right">Z-Score</TableCell>
-                  <TableCell>Timestamp</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {signals.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      No active trading signals
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  signals.map((signal, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{signal.symbol}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={signal.signal}
-                          color={signal.signal === 'BUY' ? 'success' : signal.signal === 'SELL' ? 'error' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        {signal.zScore.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(signal.timestamp).toLocaleString()}
-                      </TableCell>
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Current Trading Signals
+              </Typography>
+              
+              <TableContainer component={Paper} variant="outlined">
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Symbol</TableCell>
+                      <TableCell>Signal</TableCell>
+                      <TableCell align="right">Z-Score</TableCell>
+                      <TableCell>Timestamp</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+                  </TableHead>
+                  <TableBody>
+                    {signals.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center">
+                          No active trading signals
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      signals.map((signal, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{signal.symbol}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={signal.signal}
+                              color={signal.signal === 'BUY' ? 'success' : signal.signal === 'SELL' ? 'error' : 'default'}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            {signal.zScore.toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(signal.timestamp).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Server Logs */}
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
+          <LogViewer 
+            maxHeight="500px"
+            autoRefresh={true}
+          />
+        </Grid>
+      </Grid>
     </Box>
   );
 };
