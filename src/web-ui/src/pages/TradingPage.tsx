@@ -585,9 +585,8 @@ const TradingPage: React.FC = () => {
       {/* Server Logs */}
       <LogViewer 
         title="Trading System Logs"
-        defaultExpanded={false}
+        defaultExpanded={true}
         maxHeight={500}
-        categories={['SIGNALS', 'Z_SCORE', 'RATINGS', 'ENGINE', 'PAPER_TRADE', 'SYSTEM']}
       />
     </Box>
   );

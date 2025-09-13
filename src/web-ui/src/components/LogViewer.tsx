@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Card,
-  CardContent,
   Typography,
   FormControl,
   InputLabel,
@@ -15,7 +14,6 @@ import {
   AccordionSummary,
   AccordionDetails,
   IconButton,
-  Button,
   Chip,
   Tooltip,
   Grid,
@@ -53,10 +51,20 @@ interface LogViewerProps {
 }
 
 const LOG_LEVELS = {
-  0: { name: 'DEBUG', color: '#9e9e9e', icon: <DebugIcon fontSize="small" /> },
-  1: { name: 'INFO', color: '#2196f3', icon: <InfoIcon fontSize="small" /> },
-  2: { name: 'WARN', color: '#ff9800', icon: <WarningIcon fontSize="small" /> },
-  3: { name: 'ERROR', color: '#f44336', icon: <ErrorIcon fontSize="small" /> },
+  0: { name: 'DEBUG', color: '#666666', bgcolor: '#f5f5f5', icon: <DebugIcon fontSize="small" /> },
+  1: { name: 'INFO', color: '#1976d2', bgcolor: '#e3f2fd', icon: <InfoIcon fontSize="small" /> },
+  2: { name: 'WARN', color: '#ed6c02', bgcolor: '#fff3e0', icon: <WarningIcon fontSize="small" /> },
+  3: { name: 'ERROR', color: '#d32f2f', bgcolor: '#ffebee', icon: <ErrorIcon fontSize="small" /> },
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  'Z_SCORE': '#4caf50',      // Green
+  'ENGINE': '#2196f3',       // Blue
+  'SIGNALS': '#ff9800',      // Orange
+  'RATINGS': '#9c27b0',      // Purple
+  'SYSTEM': '#607d8b',       // Blue Grey
+  'MONITORING': '#795548',   // Brown
+  'Z_SCORE_HISTORY': '#009688' // Teal
 };
 
 const LogViewer: React.FC<LogViewerProps> = ({
@@ -70,7 +78,7 @@ const LogViewer: React.FC<LogViewerProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedLevel, setSelectedLevel] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [timeRange, setTimeRange] = useState<string>('1');
+  const [timeRange, setTimeRange] = useState<string>('24');
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
@@ -80,8 +88,8 @@ const LogViewer: React.FC<LogViewerProps> = ({
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  // Filter categories if specified
-  const displayCategories = categories ? 
+  // Filter categories if specified - ensure we always show something
+  const displayCategories = categories && availableCategories.length > 0 ? 
     availableCategories.filter(cat => categories.includes(cat)) : 
     availableCategories;
 
@@ -105,7 +113,16 @@ const LogViewer: React.FC<LogViewerProps> = ({
         api.logs.getCategories()
       ]);
 
-      setLogs(logsResponse.data.data.logs || []);
+      // Remove duplicates based on timestamp, category, and message
+      const logs = logsResponse.data.data.logs || [];
+      const uniqueLogs = logs.filter((log: LogEntry, index: number) => {
+        return logs.findIndex((l: LogEntry) => 
+          l.timestamp === log.timestamp && 
+          l.category === log.category && 
+          l.message === log.message
+        ) === index;
+      });
+      setLogs(uniqueLogs);
       setAvailableCategories(categoriesResponse.data.data.categories || []);
       
       // Count errors
@@ -138,8 +155,26 @@ const LogViewer: React.FC<LogViewerProps> = ({
         const data = JSON.parse(event.data);
         if (data.logs && data.logs.length > 0) {
           setLogs(prevLogs => {
-            const newLogs = [...data.logs, ...prevLogs].slice(0, 200); // Keep only latest 200
-            return newLogs;
+            // Remove duplicates from new logs first
+            const uniqueNewLogs = data.logs.filter((log: LogEntry, index: number) => {
+              return data.logs.findIndex((l: LogEntry) => 
+                l.timestamp === log.timestamp && 
+                l.category === log.category && 
+                l.message === log.message
+              ) === index;
+            });
+            
+            // Combine with existing logs and remove any cross-duplicates
+            const combined = [...uniqueNewLogs, ...prevLogs];
+            const uniqueCombined = combined.filter((log: LogEntry, index: number) => {
+              return combined.findIndex((l: LogEntry) => 
+                l.timestamp === log.timestamp && 
+                l.category === log.category && 
+                l.message === log.message
+              ) === index;
+            });
+            
+            return uniqueCombined.slice(0, 200); // Keep only latest 200
           });
 
           // Count new errors
@@ -219,10 +254,22 @@ const LogViewer: React.FC<LogViewerProps> = ({
     return LOG_LEVELS[level as keyof typeof LOG_LEVELS] || LOG_LEVELS[1];
   };
 
+  // Get category color
+  const getCategoryColor = (category: string) => {
+    return CATEGORY_COLORS[category] || '#757575';
+  };
+
   // Initial load
   useEffect(() => {
     loadLogs();
   }, [loadLogs]);
+
+  // Auto-start streaming if defaultExpanded is true (for Trading page)
+  useEffect(() => {
+    if (defaultExpanded) {
+      startStreaming();
+    }
+  }, [defaultExpanded, startStreaming]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -383,9 +430,10 @@ const LogViewer: React.FC<LogViewerProps> = ({
             sx={{ 
               maxHeight: maxHeight,
               overflowY: 'auto',
-              backgroundColor: '#f5f5f5',
+              backgroundColor: '#fafafa',
               padding: 1,
-              borderRadius: 1
+              borderRadius: 1,
+              border: '1px solid #e0e0e0'
             }}
           >
             {loading && logs.length === 0 ? (
@@ -399,16 +447,25 @@ const LogViewer: React.FC<LogViewerProps> = ({
             ) : (
               logs.map((log, index) => {
                 const levelInfo = getLogLevelInfo(log.level);
+                const categoryColor = getCategoryColor(log.category);
                 return (
-                  <Box key={index} sx={{ mb: 1 }}>
-                    <Paper sx={{ p: 1, fontSize: '0.875rem' }}>
-                      <Box display="flex" alignItems="flex-start" gap={1}>
+                  <Box key={`${log.timestamp}-${log.category}-${index}`} sx={{ mb: 1 }}>
+                    <Paper 
+                      sx={{ 
+                        p: 2, 
+                        fontSize: '0.875rem',
+                        backgroundColor: levelInfo.bgcolor,
+                        border: `1px solid ${levelInfo.color}20`
+                      }}
+                    >
+                      <Box display="flex" alignItems="flex-start" gap={2}>
                         <Box 
                           sx={{ 
                             color: levelInfo.color,
                             minWidth: 'auto',
                             display: 'flex',
-                            alignItems: 'center'
+                            alignItems: 'center',
+                            fontWeight: 'bold'
                           }}
                         >
                           {levelInfo.icon}
@@ -417,9 +474,11 @@ const LogViewer: React.FC<LogViewerProps> = ({
                         <Typography
                           variant="body2"
                           sx={{ 
-                            color: 'text.secondary',
-                            minWidth: 60,
-                            fontSize: '0.75rem'
+                            color: 'text.primary',
+                            minWidth: 80,
+                            fontSize: '0.8rem',
+                            fontFamily: 'monospace',
+                            fontWeight: 'bold'
                           }}
                         >
                           {formatTimestamp(log.timestamp)}
@@ -429,26 +488,42 @@ const LogViewer: React.FC<LogViewerProps> = ({
                           label={log.category}
                           size="small"
                           sx={{
-                            height: 20,
-                            fontSize: '0.6rem',
-                            minWidth: 60
+                            height: 24,
+                            fontSize: '0.65rem',
+                            minWidth: 80,
+                            fontWeight: 'bold',
+                            backgroundColor: categoryColor,
+                            color: 'white',
+                            '& .MuiChip-label': {
+                              padding: '0 8px'
+                            }
                           }}
                         />
                         
-                        <Typography variant="body2" sx={{ flex: 1 }}>
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            flex: 1,
+                            color: 'text.primary',
+                            fontSize: '0.85rem',
+                            lineHeight: 1.4
+                          }}
+                        >
                           {log.message}
                         </Typography>
                       </Box>
                       
                       {log.data && (
-                        <Box sx={{ mt: 1, ml: 4 }}>
+                        <Box sx={{ mt: 2, ml: 4 }}>
                           <pre style={{ 
                             fontSize: '0.75rem',
-                            background: '#f0f0f0',
-                            padding: 8,
-                            borderRadius: 4,
+                            background: 'rgba(0,0,0,0.05)',
+                            padding: 12,
+                            borderRadius: 6,
                             overflow: 'auto',
-                            margin: 0
+                            margin: 0,
+                            border: '1px solid rgba(0,0,0,0.1)',
+                            color: '#333'
                           }}>
                             {formatLogData(log.data)}
                           </pre>

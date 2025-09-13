@@ -71,8 +71,19 @@ async function readLogFiles(logDir: string, filters: LogFilter): Promise<LogResp
         const datePart = file.split('_')[0];
         const fileDate = new Date(datePart);
         
-        if (filters.startTime && fileDate < filters.startTime) return false;
-        if (filters.endTime && fileDate > filters.endTime) return false;
+        // Be more generous with file filtering - include files from the same day or within 1 day
+        // Let individual log entry filtering handle precise time ranges
+        const oneDayBuffer = 24 * 60 * 60 * 1000;
+        
+        if (filters.startTime) {
+          const startWithBuffer = new Date(filters.startTime.getTime() - oneDayBuffer);
+          if (fileDate < startWithBuffer) return false;
+        }
+        
+        if (filters.endTime) {
+          const endWithBuffer = new Date(filters.endTime.getTime() + oneDayBuffer);
+          if (fileDate > endWithBuffer) return false;
+        }
         
         return true;
       });
@@ -326,17 +337,32 @@ router.get('/stream', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const logDir = path.join(__dirname, '../../../logs');
-  let lastReadTime = new Date();
+  let lastReadTime = new Date(Date.now() - 2 * 60 * 60 * 1000); // Start from 2 hours ago
+  let isFirstCall = true;
   
   const sendLogUpdate = async () => {
     try {
-      const filters: LogFilter = {
-        category: category as string,
-        level: level ? LogLevel[level as keyof typeof LogLevel] : undefined,
-        startTime: lastReadTime,
-        limit: 50,
-        search: search as string
-      };
+      let filters: LogFilter;
+      
+      if (isFirstCall) {
+        // First call: get recent logs from last 24 hours  
+        filters = {
+          category: category as string,
+          level: level ? LogLevel[level as keyof typeof LogLevel] : undefined,
+          startTime: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+          limit: 30,
+          search: search as string
+        };
+      } else {
+        // Subsequent calls: only get logs newer than last read time
+        filters = {
+          category: category as string,
+          level: level ? LogLevel[level as keyof typeof LogLevel] : undefined,
+          startTime: lastReadTime,
+          limit: 50,
+          search: search as string
+        };
+      }
 
       const result = await readLogFiles(logDir, filters);
       
@@ -352,6 +378,9 @@ router.get('/stream', (req, res) => {
         if (result.dateRange.latest) {
           lastReadTime = new Date(result.dateRange.latest.getTime() + 1);
         }
+        
+        // Mark that we've sent the initial batch
+        isFirstCall = false;
       }
     } catch (error) {
       console.error('Error streaming logs:', error);
@@ -363,11 +392,11 @@ router.get('/stream', (req, res) => {
     }
   };
 
-  // Send initial logs
+  // Send initial logs immediately 
   sendLogUpdate();
 
-  // Send new logs every 5 seconds
-  const interval = setInterval(sendLogUpdate, 5000);
+  // Send new logs every 3 seconds
+  const interval = setInterval(sendLogUpdate, 3000);
 
   // Cleanup when client disconnects
   req.on('close', () => {
