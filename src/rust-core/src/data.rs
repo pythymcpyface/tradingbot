@@ -33,6 +33,7 @@ impl HybridScore {
             (false, true, _) => (0.5, ScoreConfidence::Neutral),   // Draw
             (false, false, true) => (0.25, ScoreConfidence::Low),  // Low-Confidence Loss
             (false, false, false) => (0.0, ScoreConfidence::High), // High-Confidence Loss
+            (true, true, _) => (0.5, ScoreConfidence::Neutral),    // Price up but unchanged (edge case)
         };
 
         Self {

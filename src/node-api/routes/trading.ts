@@ -9,6 +9,62 @@ const router = Router();
 let tradingEngine: TradingEngine | null = null;
 let binanceService: BinanceService | null = null;
 
+/**
+ * Store z-score data to database (same as standalone script)
+ */
+async function storeZScoreData(
+  symbol: string, 
+  timestamp: Date,
+  zScore: number, 
+  rating: number, 
+  movingAverageZScore: number | undefined,
+  zScoreThreshold: number,
+  movingAveragesPeriod: number,
+  isEnabledForTrading: boolean
+) {
+  try {
+    // Validate numeric values - skip if essential values are invalid
+    if (isNaN(rating) || !isFinite(rating)) {
+      console.warn(`⚠️  Skipping z-score data for ${symbol}: invalid rating (${rating})`);
+      return;
+    }
+    
+    if (isNaN(zScore) || !isFinite(zScore)) {
+      console.warn(`⚠️  Skipping z-score data for ${symbol}: invalid zScore (${zScore})`);
+      return;
+    }
+
+    await prisma.zScoreHistory.upsert({
+      where: {
+        symbol_timestamp: {
+          symbol,
+          timestamp
+        }
+      },
+      update: {
+        zScore,
+        rating,
+        movingAverageZScore: isNaN(movingAverageZScore!) ? null : movingAverageZScore,
+        zScoreThreshold,
+        movingAveragesPeriod,
+        isEnabledForTrading
+      },
+      create: {
+        symbol,
+        timestamp,
+        zScore,
+        rating,
+        movingAverageZScore: isNaN(movingAverageZScore!) ? null : movingAverageZScore,
+        zScoreThreshold,
+        movingAveragesPeriod,
+        isEnabledForTrading
+      }
+    });
+  } catch (error) {
+    console.error(`❌ Failed to store z-score data for ${symbol}:`, error);
+  }
+}
+
 // Auto-initialize Binance service if environment variables are available
 async function initializeBinanceIfPossible() {
   if (binanceService || !process.env.BINANCE_API_KEY || !process.env.BINANCE_API_SECRET) {
@@ -81,8 +137,11 @@ async function detectStandaloneLiveTrading(): Promise<{ isRunning: boolean; pid?
       try {
         const statusData = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
         
-        // Verify the process is still running
-        if (statusData.pid) {
+        // In a container, we can't check host processes, so trust the status file
+        // Check if we're in a container by looking for /.dockerenv
+        const isInContainer = fs.existsSync('/.dockerenv');
+        
+        if (statusData.pid && !isInContainer) {
           const { exec } = require('child_process');
           const util = require('util');
           const execPromise = util.promisify(exec);
@@ -100,6 +159,15 @@ async function detectStandaloneLiveTrading(): Promise<{ isRunning: boolean; pid?
             // Process no longer running, clean up status file
             fs.unlinkSync(statusFile);
           }
+        } else {
+          // Trust status file when in container or no PID
+          return {
+            isRunning: statusData.status === 'running',
+            pid: statusData.pid,
+            startTime: statusData.startTime,
+            isPaperTrading: statusData.isPaperTrading,
+            parameterSets: statusData.parameterSets
+          };
         }
       } catch (error) {
         console.warn('Error reading status file:', error);
@@ -170,6 +238,35 @@ router.post('/initialize', async (req, res) => {
 });
 
 /**
+ * Load parameter sets from config/live-params.json (same as standalone script)
+ */
+function loadParameterSets(): any[] {
+  const fs = require('fs');
+  const path = require('path');
+  const configPath = path.join(__dirname, '../../../config/live-params.json');
+  
+  if (!fs.existsSync(configPath)) {
+    console.warn('⚠️ Config file not found: config/live-params.json, using defaults');
+    return [];
+  }
+  
+  try {
+    const configData = fs.readFileSync(configPath, 'utf8');
+    const parsedConfig = JSON.parse(configData);
+    
+    if (!parsedConfig.parameterSets || !Array.isArray(parsedConfig.parameterSets)) {
+      console.warn('⚠️ Invalid config format: parameterSets must be an array');
+      return [];
+    }
+    
+    return parsedConfig.parameterSets.filter((p: any) => p.enabled !== false);
+  } catch (error) {
+    console.error('❌ Failed to load parameter sets:', (error as Error).message);
+    return [];
+  }
+}
+
+/**
  * POST /api/trading/start - Start the trading engine
  */
 router.post('/start', async (req, res) => {
@@ -180,18 +277,27 @@ router.post('/start', async (req, res) => {
       });
     }
 
+    // Load parameter sets (same as standalone script)
+    const parameterSets = loadParameterSets();
+    console.log(`📋 Loaded ${parameterSets.length} parameter sets for web interface trading`);
+
+    // Extract symbols from parameter sets
+    const symbols = parameterSets.length > 0 
+      ? parameterSets.map((p: any) => p.symbol)
+      : req.body.symbols || ['BTCUSDT', 'ETHUSDT'];
+
     const config: TradingConfig = {
-      zScoreThreshold: req.body.zScoreThreshold || 2.5,
+      zScoreThreshold: req.body.zScoreThreshold || 3.0,
       movingAveragesPeriod: req.body.movingAveragesPeriod || 200,
       profitPercent: req.body.profitPercent || 5.0,
       stopLossPercent: req.body.stopLossPercent || 2.5,
-      maxPositions: req.body.maxPositions || 5,
-      allocationPerPosition: req.body.allocationPerPosition || 0.1,
-      symbols: req.body.symbols || ['BTCUSDT', 'ETHUSDT'],
+      maxPositions: parameterSets.length > 0 ? parameterSets.length : (req.body.maxPositions || 5),
+      allocationPerPosition: parameterSets.length > 0 ? 0 : (req.body.allocationPerPosition || 0.1), // Not used with parameter sets
+      symbols: symbols,
       enableLiveTrading: req.body.enableLiveTrading || false,
       riskManagement: {
-        maxDailyLoss: req.body.maxDailyLoss || 100,
-        maxDrawdown: req.body.maxDrawdown || 10,
+        maxDailyLoss: req.body.maxDailyLoss || 1000,
+        maxDrawdown: req.body.maxDrawdown || 20.0,
         cooldownPeriod: req.body.cooldownPeriod || 60
       }
     };
@@ -199,6 +305,12 @@ router.post('/start', async (req, res) => {
     // Create trading engine if it doesn't exist
     if (!tradingEngine) {
       tradingEngine = new TradingEngine(binanceService, rustCore, config);
+      
+      // Set parameter sets if available (same as standalone script)
+      if (parameterSets.length > 0) {
+        (tradingEngine as any).setParameterSets(parameterSets);
+        console.log(`⚙️ Trading engine configured with ${parameterSets.length} parameter sets`);
+      }
       
       // Set up event listeners
       tradingEngine.on('orderExecuted', (order) => {
@@ -212,6 +324,20 @@ router.post('/start', async (req, res) => {
       tradingEngine.on('riskLimitHit', (type) => {
         console.log(`Risk limit hit: ${type}`);
       });
+
+      // Store z-score data to database (critical for chart display)
+      tradingEngine.on('zScoreCalculated', async (data) => {
+        await storeZScoreData(
+          data.symbol,
+          data.timestamp,
+          data.zScore,
+          data.rating,
+          data.movingAverageZScore,
+          data.zScoreThreshold,
+          data.movingAveragesPeriod,
+          data.isEnabledForTrading
+        );
+      });
     }
 
     await tradingEngine.start();
@@ -219,6 +345,8 @@ router.post('/start', async (req, res) => {
     res.json({
       message: 'Trading engine started successfully',
       config,
+      parameterSets: parameterSets.length,
+      symbols: symbols,
       state: tradingEngine.getState(),
       timestamp: new Date().toISOString()
     });
@@ -234,16 +362,65 @@ router.post('/start', async (req, res) => {
  */
 router.post('/stop', async (req, res) => {
   try {
+    // Check for standalone trading process first
+    const standaloneTrading = await detectStandaloneLiveTrading();
+    
+    if (standaloneTrading.isRunning) {
+      // Stop standalone trading process
+      try {
+        const fs = require('fs');
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execPromise = util.promisify(exec);
+        
+        if (standaloneTrading.pid) {
+          // Create a stop signal file that the trading process will monitor
+          const fs = require('fs');
+          const stopSignalFile = require('path').join('/app/shared', '.stop-trading.signal');
+          const statusFile = require('path').join(__dirname, '../../../.trading-status.json');
+          
+          // Write stop signal
+          fs.writeFileSync(stopSignalFile, JSON.stringify({
+            timestamp: new Date().toISOString(),
+            requestedBy: 'web-interface',
+            pid: standaloneTrading.pid
+          }));
+          
+          // Update status to indicate stopping
+          if (fs.existsSync(statusFile)) {
+            const currentStatus = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+            currentStatus.status = 'stopping';
+            currentStatus.lastUpdate = new Date().toISOString();
+            fs.writeFileSync(statusFile, JSON.stringify(currentStatus, null, 2));
+          }
+          
+          return res.json({
+            message: 'Stop signal sent to standalone trading process',
+            pid: standaloneTrading.pid,
+            note: 'The trading process will stop gracefully when it detects the signal',
+            timestamp: new Date().toISOString()
+          });
+        }
+      } catch (killError) {
+        console.error('Error stopping standalone process:', killError);
+        return res.status(500).json({ 
+          error: 'Failed to stop standalone trading process',
+          details: killError instanceof Error ? killError.message : String(killError)
+        });
+      }
+    }
+    
+    // Check for API-managed trading engine
     if (!tradingEngine) {
       return res.status(400).json({
-        error: 'Trading engine not running'
+        error: 'No trading engine running (neither standalone nor API-managed)'
       });
     }
 
     await tradingEngine.stop();
 
     res.json({
-      message: 'Trading engine stopped successfully',
+      message: 'API trading engine stopped successfully',
       timestamp: new Date().toISOString()
     });
 

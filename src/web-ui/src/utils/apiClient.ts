@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with default configuration
 export const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3000',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001',
   timeout: 30000, // 30 seconds timeout
   headers: {
     'Content-Type': 'application/json',
@@ -160,7 +160,7 @@ export const api = {
     getStats: (params?: any) => apiClient.get('/api/logs/stats', { params }),
     // Note: stream endpoint should be used with EventSource, not axios
     getStreamUrl: (params?: any) => {
-      const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+      const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const searchParams = new URLSearchParams(params);
       return `${baseURL}/api/logs/stream?${searchParams.toString()}`;
     },

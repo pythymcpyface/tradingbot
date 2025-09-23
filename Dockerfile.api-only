@@ -1,0 +1,46 @@
+# Simple API-only Dockerfile for Trading Bot (No React frontend)
+
+FROM node:18-slim
+
+WORKDIR /app
+
+# Install runtime dependencies including curl for healthcheck
+RUN apt-get update && apt-get install -y \
+    curl \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install all dependencies (including dev deps for ts-node)
+RUN npm ci && npm cache clean --force
+
+# Copy source code
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+COPY config/ ./config/
+
+# Copy full schema for development
+COPY prisma/schema.prisma ./prisma/schema.prisma
+
+# Generate Prisma Client for full schema
+RUN npx prisma generate --schema=./prisma/schema.prisma
+
+# Create non-root user for security
+RUN groupadd -r tradingbot && useradd -r -g tradingbot -s /bin/false tradingbot
+RUN chown -R tradingbot:tradingbot /app
+USER tradingbot
+
+# Expose port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3001/health || exit 1
+
+# Default command - run API server only
+CMD ["npx", "ts-node", "src/node-api/index.ts"]

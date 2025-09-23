@@ -1,0 +1,44 @@
+# Trading Engine Only Dockerfile - No Web Interface
+
+FROM node:18-slim
+
+WORKDIR /app
+
+# Install minimal dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install dependencies
+RUN npm ci && npm cache clean --force
+
+# Copy only what's needed for trading
+COPY src/lib/ ./src/lib/
+COPY src/services/ ./src/services/
+COPY src/node-api/services/ ./src/node-api/services/
+COPY src/types/ ./src/types/
+COPY src/utils/ ./src/utils/
+COPY scripts/ ./scripts/
+COPY config/ ./config/
+
+# Copy production schema only
+COPY prisma/schema.production.prisma ./prisma/schema.prisma
+
+# Generate Prisma Client
+RUN npx prisma generate --schema=./prisma/schema.prisma
+
+# Create non-root user
+RUN groupadd -r tradingbot && useradd -r -g tradingbot -s /bin/false tradingbot
+RUN chown -R tradingbot:tradingbot /app
+USER tradingbot
+
+# No port exposure needed - this is a background service
+
+# Run trading engine directly
+CMD ["npx", "ts-node", "scripts/startLiveTrading.ts"]

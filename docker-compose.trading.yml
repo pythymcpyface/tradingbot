@@ -1,0 +1,50 @@
+# Trading-Only Setup - Live Trading + Database (No Web Interface)
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: tradingbot-db-prod
+    environment:
+      POSTGRES_DB: tradingbot_glicko
+      POSTGRES_USER: tradingbot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tradingbot_secure_password}
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradingbot -d tradingbot_glicko"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Live Trading Engine (Background Process)
+  trading-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.trading
+    container_name: tradingbot-engine
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://tradingbot:${POSTGRES_PASSWORD:-tradingbot_secure_password}@postgres:5432/tradingbot_glicko
+      BINANCE_API_KEY: ${BINANCE_API_KEY}
+      BINANCE_SECRET_KEY: ${BINANCE_SECRET_KEY}
+      TRADING_MODE: ${TRADING_MODE:-LIVE}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config:ro
+      - trading_logs:/app/logs
+    restart: unless-stopped
+    # No ports exposed - this is a background service
+
+volumes:
+  postgres_prod_data:
+    driver: local
+  trading_logs:
+    driver: local

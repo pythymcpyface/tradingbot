@@ -10,6 +10,20 @@ const prisma = new PrismaClient();
  */
 router.get('/', async (req, res) => {
   try {
+    // Check if we're using production schema (no optimization tables)
+    const hasOptimizationTables = 'optimizationResults' in prisma;
+    
+    if (!hasOptimizationTables) {
+      return res.json({
+        results: [],
+        pagination: {
+          total: 0,
+          limit: 50,
+          offset: 0
+        },
+        message: 'Optimization data not available in production mode'
+      });
+    }
     const { 
       baseAsset, 
       quoteAsset, 
@@ -60,7 +74,7 @@ router.get('/', async (req, res) => {
       : { totalReturn: 'desc' as const };
 
     const [results, total] = await Promise.all([
-      prisma.optimizationResults.findMany({
+      (prisma as any).optimizationResults.findMany({
         where,
         include: {
           backtestRun: {
@@ -76,7 +90,7 @@ router.get('/', async (req, res) => {
         take: parseInt(limit as string),
         skip: parseInt(offset as string)
       }),
-      prisma.optimizationResults.count({ where })
+      (prisma as any).optimizationResults.count({ where })
     ]);
 
     res.json({
@@ -105,7 +119,7 @@ router.get('/best', async (req, res) => {
     if (quoteAsset) where.quoteAsset = quoteAsset;
 
     // Get best performing result by specified metric
-    const bestResult = await prisma.optimizationResults.findFirst({
+    const bestResult = await (prisma as any).optimizationResults.findFirst({
       where,
       orderBy: {
         [metric as string]: 'desc'
@@ -158,7 +172,7 @@ router.get('/stats', async (req, res) => {
     if (quoteAsset) where.quoteAsset = quoteAsset;
 
     // Get aggregated statistics
-    const stats = await prisma.optimizationResults.aggregate({
+    const stats = await (prisma as any).optimizationResults.aggregate({
       where,
       _avg: {
         totalReturn: true,
@@ -235,7 +249,7 @@ router.get('/correlation', async (req, res) => {
     if (baseAsset) where.baseAsset = baseAsset;
     if (quoteAsset) where.quoteAsset = quoteAsset;
 
-    const results = await prisma.optimizationResults.findMany({
+    const results = await (prisma as any).optimizationResults.findMany({
       where,
       select: {
         zScoreThreshold: true,

@@ -1,43 +1,9 @@
 {
-  "status": "running",
+  "status": "stopped",
   "mode": "standalone",
   "isPaperTrading": false,
-  "pid": 62707,
-  "startTime": "2025-09-10T21:32:35.273Z",
-  "parameterSets": [
-    {
-      "symbol": "BTCUSDT",
-      "baseAsset": "BTC",
-      "quoteAsset": "USDT",
-      "zScoreThreshold": 5,
-      "movingAverages": 10,
-      "profitPercent": 15,
-      "stopLossPercent": 2,
-      "allocationPercent": 33.3,
-      "enabled": true
-    },
-    {
-      "symbol": "BNBUSDT",
-      "baseAsset": "BNB",
-      "quoteAsset": "USDT",
-      "zScoreThreshold": 7,
-      "movingAverages": 10,
-      "profitPercent": 20,
-      "stopLossPercent": 30,
-      "allocationPercent": 33.3,
-      "enabled": true
-    },
-    {
-      "symbol": "ETHUSDT",
-      "baseAsset": "ETH",
-      "quoteAsset": "USDT",
-      "zScoreThreshold": 6,
-      "movingAverages": 10,
-      "profitPercent": 22,
-      "stopLossPercent": 6,
-      "allocationPercent": 33.3,
-      "enabled": true
-    }
-  ],
-  "lastUpdate": "2025-09-10T21:32:35.273Z"
+  "pid": 22151,
+  "startTime": "2025-09-18T09:54:33.609Z",
+  "parameterSets": [],
+  "lastUpdate": "2025-09-18T09:54:33.609Z"
 }

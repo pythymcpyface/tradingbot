@@ -1,0 +1,10 @@
+build:
+  docker:
+    worker: Dockerfile.trading
+  config:
+    NODE_ENV: production
+run:
+  worker: npx ts-node scripts/startLiveTrading.ts
+addons:
+  - plan: heroku-postgresql:essential-0
+    as: DATABASE

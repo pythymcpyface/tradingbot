@@ -1,0 +1,68 @@
+# Full Development Setup - Web Interface + API + Database
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: tradingbot-db
+    environment:
+      POSTGRES_DB: tradingbot_glicko
+      POSTGRES_USER: tradingbot
+      POSTGRES_PASSWORD: tradingbot_password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradingbot -d tradingbot_glicko"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Trading Bot API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api-only
+    container_name: tradingbot-api
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://tradingbot:tradingbot_password@postgres:5432/tradingbot_glicko
+      BINANCE_API_KEY: ${BINANCE_API_KEY}
+      BINANCE_API_SECRET: ${BINANCE_API_SECRET}
+      BINANCE_TESTNET: ${BINANCE_TESTNET:-false}
+      TRADING_MODE: ${TRADING_MODE:-PAPER}
+      BASE_COINS: ${BASE_COINS}
+    ports:
+      - "3000:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./config:/app/config:ro
+      - ./.trading-status.json:/app/.trading-status.json:rw
+      - ./.trading.pid:/app/.trading.pid:rw
+      - ./:/app/shared:rw
+    restart: unless-stopped
+
+  # React Web Interface
+  webapp:
+    build:
+      context: ./src/web-ui
+      dockerfile: Dockerfile.webapp
+    container_name: tradingbot-webapp
+    environment:
+      REACT_APP_API_URL: http://localhost:3000
+    ports:
+      - "3003:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local

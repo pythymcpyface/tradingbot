@@ -8,9 +8,25 @@ const prisma = new PrismaClient();
 
 /**
  * GET /api/backtest - Fetch all backtest results
+ * Returns empty results if backtest tables don't exist (production schema)
  */
 router.get('/', async (req, res) => {
   try {
+    // Check if we're using production schema (no backtest tables)
+    const hasBacktestTables = 'optimizationResults' in prisma;
+    
+    if (!hasBacktestTables) {
+      return res.json({
+        results: [],
+        pagination: {
+          total: 0,
+          limit: 50,
+          offset: 0
+        },
+        message: 'Backtest data not available in production mode'
+      });
+    }
+
     const { baseAsset, quoteAsset, limit = '50', offset = '0' } = req.query;
     
     const where: any = {};
@@ -18,7 +34,7 @@ router.get('/', async (req, res) => {
     if (quoteAsset) where.quoteAsset = quoteAsset;
 
     const [results, total] = await Promise.all([
-      prisma.optimizationResults.findMany({
+      (prisma as any).optimizationResults.findMany({
         where,
         include: {
           backtestRun: {
@@ -33,7 +49,7 @@ router.get('/', async (req, res) => {
         take: parseInt(limit as string),
         skip: parseInt(offset as string)
       }),
-      prisma.optimizationResults.count({ where })
+      (prisma as any).optimizationResults.count({ where })
     ]);
 
     res.json({
@@ -75,8 +91,18 @@ router.post('/run', async (req, res) => {
       });
     }
 
+    // Check if we're using production schema (no backtest tables)
+    const hasBacktestTables = 'backtestRuns' in prisma;
+    
+    if (!hasBacktestTables) {
+      return res.status(501).json({
+        error: 'Backtest functionality not available in production mode',
+        message: 'This endpoint requires the full development schema'
+      });
+    }
+
     // Create backtest run record
-    const backtestRun = await prisma.backtestRuns.create({
+    const backtestRun = await (prisma as any).backtestRuns.create({
       data: {
         baseAsset,
         quoteAsset,
@@ -139,7 +165,7 @@ router.post('/run', async (req, res) => {
 
     // Save backtest orders
     if (backtestResult.orders.length > 0) {
-      await prisma.backtestOrders.createMany({
+      await (prisma as any).backtestOrders.createMany({
         data: backtestResult.orders.map(order => ({
           runId: backtestRun.id,
           symbol: order.symbol,
@@ -155,7 +181,7 @@ router.post('/run', async (req, res) => {
     }
 
     // Save optimization result
-    const optimizationResult = await prisma.optimizationResults.create({
+    const optimizationResult = await (prisma as any).optimizationResults.create({
       data: {
         runId: backtestRun.id,
         baseAsset,
@@ -251,7 +277,7 @@ router.get('/:id/orders', async (req, res) => {
   try {
     const { id } = req.params;
     
-    const orders = await prisma.backtestOrders.findMany({
+    const orders = await (prisma as any).backtestOrders.findMany({
       where: {
         runId: id
       },

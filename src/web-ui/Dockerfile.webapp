@@ -1,0 +1,25 @@
+# React Web Interface Dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies (including dev deps for build)
+RUN npm ci --legacy-peer-deps && npm cache clean --force
+
+# Copy source code
+COPY src/ ./src/
+COPY public/ ./public/
+COPY tsconfig.json ./
+
+# Build React app
+RUN npm run build
+
+# Serve built app
+RUN npm install -g serve
+
+EXPOSE 3000
+
+CMD ["serve", "-s", "build", "-l", "3000"]

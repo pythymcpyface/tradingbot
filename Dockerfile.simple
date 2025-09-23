@@ -1,0 +1,98 @@
+# Simplified Dockerfile for Trading Bot (Node.js API + React Frontend)
+# This version skips Rust compilation for faster builds
+
+# ===== STAGE 1: Node.js Build =====
+FROM node:18-slim as node-builder
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install Node.js dependencies (including dev deps for ts-node)
+RUN npm ci
+
+# Copy source code (excluding frontend)
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+COPY config/ ./config/
+
+# Copy production schema only
+COPY prisma/schema.production.prisma ./prisma/schema.prisma
+
+# Generate Prisma Client for production schema
+RUN npx prisma generate --schema=./prisma/schema.prisma
+
+# Skip build for development test - use ts-node directly
+
+# ===== STAGE 2: React Frontend Build =====
+FROM node:18-slim as frontend-builder
+
+WORKDIR /app/src/web-ui
+
+# Copy frontend package files
+COPY src/web-ui/package*.json ./
+COPY src/web-ui/tsconfig.json ./
+
+# Install frontend dependencies
+RUN npm ci --only=production
+
+# Copy frontend source
+COPY src/web-ui/src/ ./src/
+COPY src/web-ui/public/ ./public/
+
+# Build React application
+RUN npm run build
+
+# ===== STAGE 3: Production Runtime =====
+FROM node:18-slim as production
+
+WORKDIR /app
+
+# Install runtime dependencies including curl for healthcheck
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package.json for runtime dependencies
+COPY package*.json ./
+
+# Install all dependencies (including dev deps for ts-node)
+RUN npm ci && npm cache clean --force
+
+# Copy Node.js source and dependencies (for ts-node)
+COPY --from=node-builder /app/src ./src
+COPY --from=node-builder /app/scripts ./scripts
+COPY --from=node-builder /app/tsconfig.json ./tsconfig.json
+COPY --from=node-builder /app/prisma ./prisma
+COPY --from=node-builder /app/node_modules ./node_modules
+
+# Copy built React frontend
+COPY --from=frontend-builder /app/src/web-ui/build ./dist/web-ui
+
+# Copy configuration files
+COPY config/ ./config/
+COPY scripts/ ./scripts/
+
+# Create non-root user for security
+RUN groupadd -r tradingbot && useradd -r -g tradingbot -s /bin/false tradingbot
+RUN chown -R tradingbot:tradingbot /app
+USER tradingbot
+
+# Expose port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3001/health || exit 1
+
+# Default command - use dev server with ts-node for testing
+CMD ["npm", "run", "dev"]

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import { config } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { RustCoreService } from './services/RustCoreService';
@@ -15,13 +16,22 @@ import { logsRouter } from './routes/logs';
 config();
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3001;
 const prisma = new PrismaClient();
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for React app compatibility
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from React build (for production)
+if (process.env.NODE_ENV === 'production') {
+  const buildPath = path.join(__dirname, '../web-ui/build');
+  app.use(express.static(buildPath));
+}
 
 // Initialize Rust Core Service
 const rustCore = new RustCoreService();
@@ -33,6 +43,14 @@ app.use('/api/optimisation', optimisationRouter);
 app.use('/api/glicko', glickoRouter);
 app.use('/api/trading', tradingRouter);
 app.use('/api/logs', logsRouter);
+
+// Serve React app for all non-API routes (in production)
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    const buildPath = path.join(__dirname, '../web-ui/build', 'index.html');
+    res.sendFile(buildPath);
+  });
+}
 
 // Health check endpoint
 app.get('/health', (req, res) => {

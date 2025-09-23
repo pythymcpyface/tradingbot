@@ -61,6 +61,17 @@ async function storeZScoreData(
   isEnabledForTrading: boolean
 ) {
   try {
+    // Validate numeric values - skip if essential values are invalid
+    if (isNaN(rating) || !isFinite(rating)) {
+      console.warn(`⚠️  Skipping z-score data for ${symbol}: invalid rating (${rating})`);
+      return;
+    }
+    
+    if (isNaN(zScore) || !isFinite(zScore)) {
+      console.warn(`⚠️  Skipping z-score data for ${symbol}: invalid zScore (${zScore})`);
+      return;
+    }
+
     await prisma.zScoreHistory.upsert({
       where: {
         symbol_timestamp: {
@@ -71,7 +82,7 @@ async function storeZScoreData(
       update: {
         zScore,
         rating,
-        movingAverageZScore,
+        movingAverageZScore: isNaN(movingAverageZScore!) ? null : movingAverageZScore,
         zScoreThreshold,
         movingAveragesPeriod,
         isEnabledForTrading
@@ -81,7 +92,7 @@ async function storeZScoreData(
         timestamp,
         zScore,
         rating,
-        movingAverageZScore,
+        movingAverageZScore: isNaN(movingAverageZScore!) ? null : movingAverageZScore,
         zScoreThreshold,
         movingAveragesPeriod,
         isEnabledForTrading
@@ -386,6 +397,24 @@ async function main() {
     console.log(`   Errors:   ./logs/${dateStr}_errors.log`);
     
     console.log('\n🛑 Press Ctrl+C to stop gracefully');
+    
+    // Monitor for stop signal from web interface
+    const stopSignalFile = path.join(__dirname, '../.stop-trading.signal');
+    setInterval(() => {
+      if (fs.existsSync(stopSignalFile)) {
+        console.log('\n🛑 Stop signal received from web interface - shutting down gracefully...');
+        
+        // Clean up signal file
+        try {
+          fs.unlinkSync(stopSignalFile);
+        } catch (error) {
+          console.warn('Warning: Could not remove stop signal file:', error);
+        }
+        
+        // Trigger graceful shutdown
+        process.kill(process.pid, 'SIGINT');
+      }
+    }, 5000); // Check every 5 seconds
     
     // Show allocation status every 30 minutes
     setInterval(() => {
