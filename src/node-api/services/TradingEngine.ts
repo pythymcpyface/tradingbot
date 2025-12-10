@@ -180,28 +180,28 @@ export class TradingEngine extends EventEmitter {
   }
 
   private startMonitoring(): void {
-    // Check for signals every 5 minutes (300000ms) to align with 5m klines interval
-    console.log('🔄 Starting monitoring loop - checking every 5 minutes');
+    // Check for signals every 1 hour (3600000ms) to align with 1h klines interval
+    console.log('🔄 Starting monitoring loop - checking every 1 hour');
     this.monitoringInterval = setInterval(async () => {
       try {
-        console.log('🔄 [Monitoring] Starting 5-minute signal check cycle...');
+        console.log('🔄 [Monitoring] Starting 1-hour signal check cycle...');
         await this.checkForSignals();
-        console.log('✅ [Monitoring] 5-minute signal check cycle completed');
-        console.log('⏰ [Monitoring] Next check in 5 minutes...');
+        console.log('✅ [Monitoring] 1-hour signal check cycle completed');
+        console.log('⏰ [Monitoring] Next check in 1 hour...');
       } catch (error) {
         console.error('❌ [Monitoring] Error in monitoring loop:', error);
         await this.logger.error('MONITORING', 'Error in monitoring loop', { error: (error as Error).message });
         this.emit('monitoringError', error);
         // Don't stop monitoring on errors, just log and continue
       }
-    }, 300000); // 5 minutes = 300000ms
+    }, 3600000); // 1 hour = 3600000ms
 
     // Initial check
     console.log('🚀 [Monitoring] Starting initial signal check in 5 seconds...');
     setTimeout(async () => {
       try {
         await this.checkForSignals();
-        console.log('⏰ [Monitoring] Next check in 5 minutes...');
+        console.log('⏰ [Monitoring] Next check in 1 hour...');
       } catch (error) {
         console.error('❌ [Monitoring] Error in initial check:', error);
       }
@@ -839,23 +839,23 @@ export class TradingEngine extends EventEmitter {
           
           // Fetch enough klines for Glicko calculations (need extra for historical comparison)
           const totalPeriodsNeeded = Math.max(50, movingAveragesPeriod * 2); // Ensure we have enough data
-          
+
           await this.logger.debug('DATA', `Fetching ${totalPeriodsNeeded} klines for ${symbol} (movingAverages: ${movingAveragesPeriod})`);
           console.log(`🔍 Fetching ${totalPeriodsNeeded} klines for ${symbol} (MA period: ${movingAveragesPeriod})...`);
-          
+
           const klines = await this.binanceService.getKlines(
             symbol,
-            '5m',
-            Date.now() - totalPeriodsNeeded * 5 * 60 * 1000, // totalPeriodsNeeded * 5 minutes * 60 seconds * 1000ms
+            '1h',
+            Date.now() - totalPeriodsNeeded * 60 * 60 * 1000, // totalPeriodsNeeded * 1 hour * 60 minutes * 60 seconds * 1000ms
             undefined,
             totalPeriodsNeeded
           );
-          
+
           await this.logger.debug('DATA', `Retrieved ${klines?.length || 0} klines for ${symbol}`);
           console.log(`📊 Got ${klines?.length || 0} klines for ${symbol}`);
 
           if (klines && klines.length >= movingAveragesPeriod) {
-            // Calculate Glicko ratings for each 5-minute interval
+            // Calculate Glicko ratings for each 1-hour interval
             const glickoRatings = await this.calculateGlickoRatingsForIntervals(symbol, klines, movingAveragesPeriod);
             
             if (glickoRatings.length > 0) {
@@ -918,7 +918,7 @@ export class TradingEngine extends EventEmitter {
   }
 
   /**
-   * Calculate Glicko-2 ratings for each 5-minute interval based on price performance
+   * Calculate Glicko-2 ratings for each 1-hour interval based on price performance
    */
   private async calculateGlickoRatingsForIntervals(symbol: string, klines: any[], movingAveragesPeriod: number): Promise<any[]> {
     try {
@@ -1099,21 +1099,21 @@ export class TradingEngine extends EventEmitter {
       
       // Calculate how many additional intervals we need
       const periodsNeeded = movingAveragesPeriod - existingHistory.length + 5; // Extra for safety
-      
+
       // Fetch historical klines
       const klines = await this.binanceService.getKlines(
         tradingSymbol,
-        '5m',
-        Date.now() - periodsNeeded * 5 * 60 * 1000,
+        '1h',
+        Date.now() - periodsNeeded * 60 * 60 * 1000,
         undefined,
         periodsNeeded
       );
-      
+
       if (!klines || klines.length < 2) {
         console.warn(`⚠️ Insufficient historical klines for ${symbol}, using current Z-score for moving average`);
         return;
       }
-      
+
       // Calculate Glicko ratings for each historical interval
       const historicalRatings = await this.calculateGlickoRatingsForIntervals(tradingSymbol, klines, movingAveragesPeriod);
       
