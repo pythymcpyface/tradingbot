@@ -3,13 +3,24 @@ use crate::data::MovingStats;
 use rayon::prelude::*;
 use std::collections::HashMap;
 
+/// Represents an open position in the portfolio.
+///
+/// OCO (One-Cancels-Other) Exit Mechanism:
+/// Each position has two pre-defined exit levels that function as OCO orders:
+/// 1. take_profit_price: When price reaches this level, position auto-closes with "EXIT_PROFIT"
+/// 2. stop_loss_price: When price reaches this level, position auto-closes with "EXIT_STOP"
+///
+/// Whichever level is hit first wins and closes the position. The other is automatically cancelled
+/// (since the position no longer exists). This mimics real OCO orders on Binance/Kraken.
 #[derive(Debug, Clone)]
 struct Position {
     symbol: String,
     quantity: f64,
     entry_price: f64,
     entry_time: i64,
+    /// Stop loss threshold: price ≤ this triggers EXIT_STOP
     stop_loss_price: f64,
+    /// Take profit threshold: price ≥ this triggers EXIT_PROFIT
     take_profit_price: f64,
 }
 
@@ -43,6 +54,22 @@ impl Portfolio {
         total_value
     }
 
+    /// Opens a new position with OCO (One-Cancels-Other) exit levels.
+    ///
+    /// Entry Rules:
+    /// - Position size = allocation_percent of available cash
+    /// - Each BUY signal creates a position with:
+    ///   - Entry price: current market price
+    ///   - Quantity: allocated_value / entry_price
+    ///
+    /// OCO Exit Levels:
+    /// - Take Profit: entry_price * (1 + profit_percent/100)
+    /// - Stop Loss: entry_price * (1 - stop_loss_percent/100)
+    ///
+    /// Example (2% profit_percent, 2.5% stop_loss_percent):
+    /// - Entry at $100: TP=$102, SL=$97.50
+    /// - Either level is hit first, position auto-closes
+    /// - Z-score SELL signals can also close the position early
     fn open_position(
         &mut self,
         symbol: String,
@@ -57,11 +84,12 @@ impl Portfolio {
 
         let position_value = self.cash * allocation_percent;
         let quantity = position_value / price;
-        
+
         if quantity * price > self.cash {
             return None; // Not enough cash
         }
 
+        // Calculate OCO exit levels
         let take_profit_price = price * (1.0 + config.profit_percent / 100.0);
         let stop_loss_price = price * (1.0 - config.stop_loss_percent / 100.0);
 
@@ -130,14 +158,35 @@ impl Portfolio {
     }
 }
 
+/// Calculate Z-score based trading signals from Glicko-2 ratings.
+///
+/// Z-SCORE CALCULATION:
+/// For each time period, using a rolling window of N periods:
+/// - mean = average(ratings[window_start..window_end])
+/// - std_dev = sqrt(variance(ratings[window_start..window_end]))
+/// - z_score = (current_rating - mean) / std_dev
+///
+/// SIGNAL GENERATION (Z-Score Reversals):
+/// - BUY signal:  z_score > +threshold  (rating significantly above average)
+/// - SELL signal: z_score < -threshold  (rating significantly below average)
+/// - HOLD:        -threshold ≤ z_score ≤ +threshold (neutral region)
+///
+/// INTERPRETATION:
+/// - Positive z_score: Glicko rating is rising (bullish momentum)
+/// - Negative z_score: Glicko rating is falling (bearish momentum)
+/// - Reversal: When z_score crosses threshold, signal is generated
+///
+/// PARAMETERS:
+/// - moving_averages_period: Window size (number of periods for rolling calculation)
+/// - threshold: Z-score boundary for signal generation (typically 1.5-2.5)
 fn calculate_z_score_signals(
     ratings: &[GlickoRating],
     moving_averages_period: usize,
     threshold: f64,
 ) -> HashMap<String, Vec<(i64, f64, String)>> {
     let mut symbol_ratings: HashMap<String, Vec<(i64, f64)>> = HashMap::new();
-    
-    // Group ratings by symbol
+
+    // Group ratings by symbol for independent signal calculation
     for rating in ratings {
         symbol_ratings
             .entry(rating.symbol.clone())
@@ -148,27 +197,32 @@ fn calculate_z_score_signals(
     let mut signals = HashMap::new();
 
     for (symbol, mut rating_history) in symbol_ratings {
+        // Sort by timestamp to ensure chronological order
         rating_history.sort_by_key(|(timestamp, _)| *timestamp);
         let mut symbol_signals = Vec::new();
 
+        // Calculate z-score for each period starting from moving_averages_period
         for window_end in moving_averages_period..rating_history.len() {
             let current_timestamp = rating_history[window_end].0;
             let current_rating = rating_history[window_end].1;
-            
+
+            // Extract the window of ratings for this period
             let window_ratings: Vec<f64> = rating_history
                 [(window_end - moving_averages_period)..window_end]
                 .iter()
                 .map(|(_, rating)| *rating)
                 .collect();
 
+            // Calculate z-score using current rating against window
             let stats = MovingStats::calculate(&window_ratings, current_rating);
-            
+
+            // Generate signal based on z-score threshold
             let signal = if stats.z_score > threshold {
-                "BUY"
+                "BUY"  // Strong upside deviation
             } else if stats.z_score < -threshold {
-                "SELL"
+                "SELL" // Strong downside deviation
             } else {
-                "HOLD"
+                "HOLD" // Within neutral band
             };
 
             symbol_signals.push((current_timestamp, stats.z_score, signal.to_string()));
@@ -355,10 +409,43 @@ struct PerformanceMetrics {
     avg_trade_duration: f64,
 }
 
+/// Run a complete backtest simulation with Z-score signals and OCO exit logic.
+///
+/// ALGORITHM FLOW:
+/// 1. Calculate Z-score signals from Glicko-2 ratings
+///    - Z-score = (current_rating - moving_avg) / std_dev
+///    - BUY signal when z_score > threshold
+///    - SELL signal when z_score < -threshold
+///
+/// 2. For each signal, execute entry/exit:
+///    - BUY: Enter position with OCO levels set
+///    - SELL: Exit via Z-score reversal (EXIT_ZSCORE)
+///
+/// 3. Check OCO exit levels each period (automatically close if triggered):
+///    - Exit if price ≤ stop_loss_price (EXIT_STOP) - loss limiting
+///    - Exit if price ≥ take_profit_price (EXIT_PROFIT) - profit taking
+///
+/// SLIPPAGE MODEL:
+/// - Entry: Assumed at signal price (no slippage modeled for simplicity)
+/// - Exit: Assumed at actual price level (SL/TP/Z-score)
+/// - Note: In live trading, actual execution may differ due to:
+///   - Order book depth
+///   - Market impact
+///   - Time to fill (prices may move while order processes)
+///
+/// POSITION SIZING:
+/// - Each BUY signal allocates 95% of available cash
+/// - Quantity = (cash * 0.95) / entry_price
+/// - Risk per trade = stop_loss_percent of position
+///
+/// ORDER TYPES SIMULATED:
+/// - BUY: Market order at signal price
+/// - SELL via Z-score: Market order at signal price (EXIT_ZSCORE)
+/// - SELL via OCO: Market order at stop/profit level (EXIT_STOP/EXIT_PROFIT)
 pub fn run_backtest(config: BacktestConfig, ratings: Vec<GlickoRating>) -> Result<BacktestResult> {
     let initial_cash = 10000.0; // Starting with $10,000
     let mut portfolio = Portfolio::new(initial_cash);
-    
+
     // Calculate z-score signals
     let signals = calculate_z_score_signals(
         &ratings,
@@ -408,11 +495,13 @@ pub fn run_backtest(config: BacktestConfig, ratings: Vec<GlickoRating>) -> Resul
                 continue;
             }
 
-            // Process signal at current price
+            // === SIGNAL EXECUTION ===
+            // Process entry/exit signals from Z-score reversals
             let current_prices = [(symbol.clone(), price)].iter().cloned().collect();
-            
+
             match signal.as_str() {
                 "BUY" => {
+                    // Z-score BUY signal: enter new position with OCO levels
                     portfolio.open_position(
                         symbol.clone(),
                         price,
@@ -422,18 +511,25 @@ pub fn run_backtest(config: BacktestConfig, ratings: Vec<GlickoRating>) -> Resul
                     );
                 }
                 "SELL" => {
+                    // Z-score SELL signal: exit current position
+                    // Reason: "EXIT_ZSCORE" - Z-score reversal from positive to negative
                     portfolio.close_position(&symbol, price, *signal_time, "EXIT_ZSCORE");
                 }
-                _ => {} // HOLD
+                _ => {} // HOLD - no action
             }
 
-            // Check stop-loss and take-profit for existing positions
+            // === OCO EXIT LEVEL CHECKING ===
+            // This is the One-Cancels-Other logic: automatically check if price hit either exit level
+            // Both levels are checked simultaneously; whichever is hit first closes the position
             let positions_to_close: Vec<String> = portfolio.positions
                 .iter()
                 .filter_map(|(sym, pos)| {
+                    // OCO Check: price <= SL triggers stop-loss exit
                     if price <= pos.stop_loss_price {
                         Some((sym.clone(), "EXIT_STOP"))
-                    } else if price >= pos.take_profit_price {
+                    }
+                    // OCO Check: price >= TP triggers take-profit exit
+                    else if price >= pos.take_profit_price {
                         Some((sym.clone(), "EXIT_PROFIT"))
                     } else {
                         None
@@ -442,6 +538,8 @@ pub fn run_backtest(config: BacktestConfig, ratings: Vec<GlickoRating>) -> Resul
                 .map(|(sym, reason)| sym)
                 .collect();
 
+            // Close positions that hit their OCO levels
+            // Each position can only close once; after closing, the other level is automatically cancelled
             for pos_symbol in positions_to_close {
                 if price <= portfolio.positions[&pos_symbol].stop_loss_price {
                     portfolio.close_position(&pos_symbol, price, *signal_time, "EXIT_STOP");
