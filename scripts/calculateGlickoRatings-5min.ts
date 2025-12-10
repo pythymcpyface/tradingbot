@@ -1,11 +1,15 @@
 #!/usr/bin/env ts-node
 
 /**
- * Calculate Glicko-2 Ratings Script - 5-MINUTE INTERVALS
- * 
- * CORRECTED VERSION: Generates ratings every 5 minutes based on klines data
- * This ensures proper temporal consistency and maximum data granularity.
- * 
+ * Calculate Glicko-2 Ratings Script - 5-MINUTE INTERVALS (UNIFIED LIVE ENGINE ALGORITHM)
+ *
+ * ALGORITHM: Simplified Glicko-2 variant matching live trading engine.
+ * - Game Result: Continuous scaling from price changes: gameResult = 0.5 + (priceChange * 50)
+ * - Volatility Update: Simplified direct calculation: σ' = √(σ² + δ²/v)
+ * - Opponent Rating: Dynamic, market-based: opponentRating = 1500 + (marketVolatility * 1000) + (log(volumeRatio) * 100)
+ *
+ * PROCESSING: Every 5 minutes per kline, maximizing data granularity
+ *
  * Arguments: coins, startTime, endTime
  * As specified in SPEC.md Stage 3.5
  */
@@ -96,49 +100,41 @@ class GlickoCalculator5Min {
   }
 
   /**
-   * Calculate hybrid performance score according to GLICKO_SPEC.html
+   * Calculate game result using continuous scaling (matches live trading algorithm)
+   * Maps price change to [0.0, 1.0] where 0.5 is neutral (0% change)
    */
-  private calculateHybridScore(kline: KlineData): HybridScore {
-    const { open, close, takerBuyBaseAssetVolume, volume } = kline;
-    
-    // Calculate price change component
-    const priceChange = (close - open) / open;
-    const priceChangeAbs = Math.abs(priceChange);
-    
-    // Calculate volume ratio component (taker buy volume ratio)
-    const volumeRatio = volume > 0 ? takerBuyBaseAssetVolume / volume : 0.5;
-    
-    // Determine confidence level based on volume and price movement
-    const confidenceThreshold = 0.02; // 2% price movement for high confidence
-    const isHighConfidence = priceChangeAbs > confidenceThreshold;
-    
-    // Calculate raw score based on price direction and volume bias
-    let rawScore: number;
-    let scenario: HybridScore['scenario'];
-    
-    if (priceChange > 0) {
-      // Price increased - bullish signal
-      rawScore = 0.5 + (priceChange * 10) + (volumeRatio - 0.5) * 0.2;
-      scenario = isHighConfidence ? 'HIGH_CONFIDENCE_WIN' : 'LOW_CONFIDENCE_WIN';
-    } else if (priceChange < 0) {
-      // Price decreased - bearish signal  
-      rawScore = 0.5 + (priceChange * 10) + (volumeRatio - 0.5) * 0.2;
-      scenario = isHighConfidence ? 'HIGH_CONFIDENCE_LOSS' : 'LOW_CONFIDENCE_LOSS';
-    } else {
-      // No price change - neutral
-      rawScore = 0.5 + (volumeRatio - 0.5) * 0.1;
-      scenario = 'DRAW';
+  private calculateGameResult(priceChange: number): number {
+    // Draw detection
+    if (Math.abs(priceChange) < 0.001) { // < 0.1% change = draw
+      return 0.5;
     }
-    
-    // Normalize score to 0-1 range
-    const normalizedScore = Math.max(0, Math.min(1, rawScore));
-    
-    return {
-      score: normalizedScore,
-      scenario,
-      priceChange,
-      volumeRatio
-    };
+
+    // Continuous scaling: maps price change to game result
+    const gameResult = 0.5 + (priceChange * 50);
+
+    // Bound result to [0.0, 1.0]
+    return Math.min(1.0, Math.max(0.0, gameResult));
+  }
+
+  /**
+   * Calculate market volatility from recent price movements
+   * Used to adjust opponent rating dynamically
+   */
+  private calculateMarketVolatility(klines: KlineData[]): number {
+    if (klines.length < 2) return 0.1;
+
+    const returns: number[] = [];
+    for (let i = 1; i < klines.length; i++) {
+      const prevPrice = klines[i - 1].close;
+      const currPrice = klines[i].close;
+      const logReturn = Math.log(currPrice / prevPrice);
+      returns.push(logReturn);
+    }
+
+    // Calculate standard deviation of returns
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+    return Math.sqrt(variance);
   }
 
   /**
@@ -184,7 +180,8 @@ class GlickoCalculator5Min {
   }
 
   /**
-   * Update Glicko-2 rating based on game results
+   * Update Glicko-2 rating based on game results (simplified version matching live engine)
+   * Uses direct volatility calculation instead of Illinois algorithm
    */
   private updateGlickoRating(currentRating: GlickoRating, games: GlickoGame[]): GlickoRating {
     if (games.length === 0) {
@@ -211,10 +208,10 @@ class GlickoCalculator5Min {
     for (const game of games) {
       const muJ = this.convertRatingToGlicko2(game.opponentRating);
       const phiJ = this.convertRDToGlicko2(game.opponentRD);
-      
+
       const gPhiJ = this.g(phiJ);
       const E_outcome = this.E(mu, muJ, phiJ);
-      
+
       variance += (gPhiJ * gPhiJ * E_outcome * (1 - E_outcome));
       delta += gPhiJ * (game.score - E_outcome);
     }
@@ -226,74 +223,22 @@ class GlickoCalculator5Min {
     variance = 1 / variance;
     delta *= variance;
 
-    // Calculate new volatility using iterative algorithm
-    const a = Math.log(sigma * sigma);
-    const deltaSquared = delta * delta;
-    const phiSquared = phi * phi;
-    const tauSquared = this.TAU * this.TAU;
-
-    // Iterative calculation for new volatility
-    let A = a;
-    let B: number;
-
-    if (deltaSquared > phiSquared + variance) {
-      B = Math.log(deltaSquared - phiSquared - variance);
-    } else {
-      let k = 1;
-      while (this.f(a - k * this.TAU, delta, phi, variance, a) < 0) {
-        k++;
-      }
-      B = a - k * this.TAU;
-    }
-
-    let fA = this.f(A, delta, phi, variance, a);
-    let fB = this.f(B, delta, phi, variance, a);
-
-    // Illinois algorithm
-    while (Math.abs(B - A) > this.EPSILON) {
-      const C = A + (A - B) * fA / (fB - fA);
-      const fC = this.f(C, delta, phi, variance, a);
-
-      if (fC * fB < 0) {
-        A = B;
-        fA = fB;
-      } else {
-        fA /= 2;
-      }
-
-      B = C;
-      fB = fC;
-    }
-
-    const newSigma = Math.exp(A / 2);
+    // Simplified volatility update: newSigma = sqrt(sigma^2 + delta^2/v)
+    const newSigma = Math.sqrt(sigma * sigma + (delta * delta) / variance);
+    const boundedSigma = Math.min(0.2, Math.max(0.01, newSigma));
 
     // Calculate new rating and RD
-    const phiStar = Math.sqrt(phiSquared + newSigma * newSigma);
-    const newPhi = 1 / Math.sqrt(1 / (phiStar * phiStar) + 1 / variance);
-    const newMu = mu + newPhi * newPhi * delta;
+    const phiSquared = phi * phi;
+    const phiStar = Math.sqrt(phiSquared + boundedSigma * boundedSigma);
+    const newPhiSquared = 1 / (1 / (phiStar * phiStar) + 1 / variance);
+    const newPhi = Math.sqrt(newPhiSquared);
+    const newMu = mu + newPhiSquared * delta;
 
     return {
       rating: this.convertRatingFromGlicko2(newMu),
       ratingDeviation: this.convertRDFromGlicko2(newPhi),
-      volatility: newSigma
+      volatility: boundedSigma
     };
-  }
-
-  /**
-   * Helper function for volatility calculation
-   */
-  private f(x: number, delta: number, phi: number, v: number, a: number): number {
-    const eX = Math.exp(x);
-    const phiSquared = phi * phi;
-    const deltaSquared = delta * delta;
-    
-    const numerator1 = eX * (deltaSquared - phiSquared - v - eX);
-    const denominator1 = 2 * Math.pow(phiSquared + v + eX, 2);
-    
-    const numerator2 = x - a;
-    const denominator2 = this.TAU * this.TAU;
-    
-    return numerator1 / denominator1 - numerator2 / denominator2;
   }
 
   /**
@@ -334,22 +279,38 @@ class GlickoCalculator5Min {
 
   /**
    * Process coin performance for a specific 5-minute interval
+   * Calculates continuous game results and dynamic opponent ratings
    */
-  private processCoinPerformance(coin: string, klines: KlineData[], timestamp: string): GlickoGame[] {
+  private processCoinPerformance(coin: string, klines: KlineData[], timestamp: string, recentKlines: KlineData[] = []): GlickoGame[] {
     const games: GlickoGame[] = [];
-    
+
+    // Calculate market volatility from recent klines for dynamic opponent rating
+    const marketVolatility = recentKlines.length > 0 ?
+      this.calculateMarketVolatility(recentKlines) :
+      this.calculateMarketVolatility(klines);
+
     for (const kline of klines) {
-      const hybridScore = this.calculateHybridScore(kline);
-      
+      // Calculate price change for continuous scaling
+      const priceChange = (kline.close - kline.open) / kline.open;
+      const gameResult = this.calculateGameResult(priceChange);
+
+      // Calculate volume ratio for dynamic opponent rating
+      const volumeRatio = (kline.volume || 1) / (recentKlines[recentKlines.length - 1]?.volume || 1);
+
+      // Dynamic opponent rating: base + market volatility adjustment + volume adjustment
+      const opponentRating = this.OPPONENT_RATING +
+        (marketVolatility * 1000) +
+        (Math.log(volumeRatio) * 100);
+
       // Create a game against the market benchmark
       games.push({
         timestamp: new Date(timestamp),
-        score: hybridScore.score,
-        opponentRating: this.OPPONENT_RATING,
+        score: gameResult,
+        opponentRating: opponentRating,
         opponentRD: this.OPPONENT_RD
       });
     }
-    
+
     return games;
   }
 
