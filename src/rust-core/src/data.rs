@@ -23,17 +23,31 @@ impl HybridScore {
         taker_buy_volume: f64,
         taker_sell_volume: f64,
     ) -> Self {
+        // Calculate price change for continuous scaling (matches live engine algorithm)
+        let price_change = (close - open) / open;
+
+        // Continuous scaling: gameResult = 0.5 + (priceChange * 50)
+        // Maps to [0.0, 1.0] where 0.5 is neutral (0% change)
+        let score = if (price_change).abs() < 0.001 {
+            // Draw: < 0.1% change
+            0.5
+        } else {
+            // Continuous scaling bounded to [0.0, 1.0]
+            (0.5 + price_change * 50.0).max(0.0).min(1.0)
+        };
+
+        // Determine price direction and dominance for metadata
         let price_up = close > open;
-        let price_unchanged = (close - open).abs() < f64::EPSILON;
+        let price_unchanged = (close - open).abs() < 0.001; // < 0.1% change threshold
         let taker_buy_dominant = taker_buy_volume > taker_sell_volume;
 
-        let (score, confidence) = match (price_up, price_unchanged, taker_buy_dominant) {
-            (true, false, true) => (1.0, ScoreConfidence::High),   // High-Confidence Win
-            (true, false, false) => (0.75, ScoreConfidence::Low),  // Low-Confidence Win
-            (false, true, _) => (0.5, ScoreConfidence::Neutral),   // Draw
-            (false, false, true) => (0.25, ScoreConfidence::Low),  // Low-Confidence Loss
-            (false, false, false) => (0.0, ScoreConfidence::High), // High-Confidence Loss
-            (true, true, _) => (0.5, ScoreConfidence::Neutral),    // Price up but unchanged (edge case)
+        // Assign confidence level based on game result magnitude
+        let confidence = if (score - 0.5).abs() < 0.1 {
+            ScoreConfidence::Neutral  // Close to 0.5 (draw)
+        } else if (score - 0.5).abs() < 0.25 {
+            ScoreConfidence::Low      // Low-confidence move (0.25-0.75 range)
+        } else {
+            ScoreConfidence::High     // High-confidence move (0.0-0.25 or 0.75-1.0)
         };
 
         Self {

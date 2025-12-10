@@ -51,62 +51,12 @@ fn g_function(phi: f64) -> f64 {
     1.0 / (1.0 + 3.0 * phi.powi(2) / std::f64::consts::PI.powi(2)).sqrt()
 }
 
-// f(x) function for volatility calculation
-fn f_function(x: f64, delta_squared: f64, phi_squared: f64, v: f64, a: f64, tau_squared: f64) -> f64 {
-    let ex = x.exp();
-    let num = ex * (delta_squared - phi_squared - v - ex);
-    let den = 2.0 * (phi_squared + v + ex).powi(2);
-    num / den - (x - a) / tau_squared
-}
-
-// Illinois algorithm for finding new volatility
-fn find_new_volatility(
-    sigma: f64,
-    delta: f64,
-    phi: f64,
-    v: f64,
-) -> f64 {
-    let a = (sigma.powi(2)).ln();
-    let tau_squared = TAU.powi(2);
-    let delta_squared = delta.powi(2);
-    let phi_squared = phi.powi(2);
-
-    // Initial bounds
-    let mut big_a = a;
-    let mut big_b = if delta_squared > phi_squared + v {
-        (delta_squared - phi_squared - v).ln()
-    } else {
-        let mut k = 1.0;
-        while f_function(a - k * TAU, delta_squared, phi_squared, v, a, tau_squared) < 0.0 {
-            k += 1.0;
-        }
-        a - k * TAU
-    };
-
-    let mut f_a = f_function(big_a, delta_squared, phi_squared, v, a, tau_squared);
-    let mut f_b = f_function(big_b, delta_squared, phi_squared, v, a, tau_squared);
-
-    // Illinois algorithm
-    for _ in 0..50 {
-        let big_c = big_a + (big_a - big_b) * f_a / (f_b - f_a);
-        let f_c = f_function(big_c, delta_squared, phi_squared, v, a, tau_squared);
-
-        if f_c.abs() < EPSILON {
-            return (big_c / 2.0).exp();
-        }
-
-        if f_c * f_b < 0.0 {
-            big_a = big_b;
-            f_a = f_b;
-        } else {
-            f_a /= 2.0;
-        }
-
-        big_b = big_c;
-        f_b = f_c;
-    }
-
-    (big_a / 2.0).exp()
+// Simplified volatility calculation (matches live engine algorithm)
+// σ' = √(σ² + δ²/v)
+fn calculate_new_volatility(sigma: f64, delta: f64, v: f64) -> f64 {
+    let new_sigma = (sigma.powi(2) + (delta.powi(2) / v)).sqrt();
+    // Bound volatility to reasonable range [0.01, 0.2]
+    new_sigma.max(0.01).min(0.2)
 }
 
 pub fn update_rating(
@@ -136,8 +86,8 @@ pub fn update_rating(
     // Step 2: Compute estimated improvement
     let delta = v * g_phi_j * (score - e_mu_mu_j);
 
-    // Step 3: Compute new volatility
-    let new_volatility = find_new_volatility(player.volatility, delta, phi, v);
+    // Step 3: Compute new volatility (simplified version)
+    let new_volatility = calculate_new_volatility(player.volatility, delta, v);
 
     // Step 4: Update rating and RD
     let phi_star = (phi.powi(2) + new_volatility.powi(2)).sqrt();
