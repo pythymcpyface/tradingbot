@@ -13,30 +13,48 @@ The system uses a hybrid architecture for maximum performance:
 
 ## 🔬 The Glicko-2 Strategy
 
-This bot implements a novel approach to cryptocurrency trading using the Glicko-2 rating system originally designed for competitive gaming rankings. The key innovation is the **hybrid performance scoring** that combines:
+This bot implements a novel approach to cryptocurrency trading using the Glicko-2 rating system originally designed for competitive gaming rankings. The key innovation is **continuous price-to-rating scaling** that maps price movements directly into skill ratings:
 
-1. **Price Action**: Whether the asset price moved up, down, or stayed flat
-2. **Volume Analysis**: Dominance of taker buy vs taker sell volume
-3. **Confidence Scoring**: High/low confidence signals based on price-volume agreement
+```
+gameResult = 0.5 + (priceChange × 50)    [bounded 0.0 to 1.0]
+```
 
-### Hybrid Scoring Matrix
+### Glicko-2 Rating Parameters
 
-| Price Movement | Volume Dominance | Score | Confidence | Interpretation |
-|----------------|-----------------|-------|------------|----------------|
-| Up ↗️ | Taker Buy > Sell | 1.0 | HIGH | Strong bullish momentum |
-| Up ↗️ | Taker Sell > Buy | 0.75 | LOW | Uncertain upward move |
-| Unchanged → | Any | 0.5 | NEUTRAL | Consolidation |
-| Down ↘️ | Taker Buy > Sell | 0.25 | LOW | Uncertain downward move |
-| Down ↘️ | Taker Sell > Buy | 0.0 | HIGH | Strong bearish momentum |
+| Parameter | Symbol | Description | Range |
+|-----------|--------|-------------|-------|
+| Rating | μ | Skill estimate (1500 = baseline) | 900-2100 (typical) |
+| Rating Deviation | φ | Uncertainty in rating | 50-350 |
+| Volatility | σ | Long-term rating fluctuation | 0.01-0.2 |
+
+### Continuous Scaling Formula
+
+| Price Change | Game Result | Interpretation |
+|--------------|-------------|-----------------|
+| ≤ -2% | 0.0 | Loss (bearish) |
+| -0.5% | 0.25 | Mild bearish |
+| ~0% | 0.5 | Draw (neutral) |
+| +0.5% | 0.75 | Mild bullish |
+| ≥ +2% | 1.0 | Win (bullish) |
+
+### Dynamic Opponent Rating
+
+Instead of fixed opponent (1500), market conditions adjust the opponent:
+
+```
+opponentRating = 1500 + (marketVolatility × 1000) + (log(volumeRatio) × 100)
+```
+
+This makes the algorithm self-adjusting to market volatility and volume patterns.
 
 ## 🚀 Features
 
 ### Core Trading Features
-- ✅ Real-time Glicko-2 rating calculations
+- ✅ Real-time Glicko-2 rating calculations (1-hour intervals)
 - ✅ Z-score based momentum signal generation
 - ✅ Automated trade execution via Binance API
-- ✅ Risk management (stop-loss, take-profit, position limits)
-- ✅ OCO (One-Cancels-Other) order support
+- ✅ Risk management with OCO (One-Cancels-Other) orders
+- ✅ Three exit mechanisms: Z-score reversal, Take Profit, Stop Loss
 
 ### Backtesting & Optimization
 - ✅ Windowed backtesting with walk-forward analysis
@@ -91,14 +109,16 @@ npm run docker:up
 npm run prisma:generate
 ```
 
-5. **Run your first analysis**
+5. **Run your first analysis** (using 1-hour intervals)
 ```bash
 # Quick test (see guides for details)
 npm run getTradingPairs
 npm run getKlines "BTCUSDT,ETHUSDT" "2024-01-01" "2024-01-02"
-npm run calculateGlickoRatings "BTC,ETH" "2024-01-01" "2024-01-02"
+npm run calculateGlickoRatings-fixed "BTC,ETH" "2024-01-01" "2024-01-02"
 npm run plotGlickoRatings
 ```
+
+Note: All rating calculations use unified continuous scaling algorithm with 1-hour intervals.
 
 ## 📖 Execution Guides
 
@@ -323,10 +343,15 @@ docker-compose logs -f api
 
 ## 📚 Documentation
 
-- [Glicko-2 Algorithm Specification](GLICKO_SPEC.html)
-- [Backtesting Methodology](BACKTEST_SPEC.html)
-- [API Documentation](docs/api.md)
-- [Trading Strategy Guide](docs/strategy.md)
+### Core Documentation
+- **[Glicko-2 Algorithm Specification](docs/GLICKO_SPEC.md)** - Complete technical specification including mathematical foundations, continuous scaling, and simplified volatility calculation
+- **[Backtesting Specification](docs/BACKTEST_SPEC.md)** - Backtest engine algorithm with OCO exit logic and validation strategy
+- **[Parity Validation](docs/PARITY_VALIDATION.md)** - Confirms all systems (batch, live, backtest) use identical algorithms
+
+### Quick Start & Guides
+- [Quick Start Guide](docs/QUICK_START_GUIDE.md) - Get running in 5 minutes
+- [Stage Execution Guide](docs/STAGE_EXECUTION_GUIDE.md) - Complete step-by-step instructions
+- [Comprehensive Live Trading Guide](docs/COMPREHENSIVE_LIVE_TRADING_GUIDE.md) - Full trading system guide
 
 ## 🤝 Contributing
 
