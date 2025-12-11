@@ -3,88 +3,88 @@
     "symbol": "LINKETH",
     "completedChunks": 40,
     "totalChunks": 56,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 478906,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 517210,
     "startedAt": "2025-08-20T06:47:02.677Z"
   },
   "BTCUSDT": {
     "symbol": "BTCUSDT",
     "completedChunks": 17,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-06-22T23:04:59.999Z",
-    "totalRecords": 241643,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 290039,
     "startedAt": "2025-08-20T13:38:35.852Z"
   },
   "ETHBTC": {
     "symbol": "ETHBTC",
     "completedChunks": 18,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-06-03T09:04:59.999Z",
-    "totalRecords": 228503,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 279947,
     "startedAt": "2025-08-20T13:38:35.852Z"
   },
   "ADABTC": {
     "symbol": "ADABTC",
     "completedChunks": 18,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-06-22T23:04:59.999Z",
-    "totalRecords": 246643,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 295039,
     "startedAt": "2025-08-20T13:38:35.852Z"
   },
   "SOLBTC": {
     "symbol": "SOLBTC",
     "completedChunks": 19,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 241643,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 279947,
     "startedAt": "2025-08-20T13:38:42.119Z"
   },
   "XRPBTC": {
     "symbol": "XRPBTC",
-    "completedChunks": 8,
+    "completedChunks": 16,
     "totalChunks": 1,
-    "lastCompletedTime": "2024-08-19T00:04:59.999Z",
-    "totalRecords": 145451,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 279947,
     "startedAt": "2025-08-20T13:38:42.119Z"
   },
   "DOGEBTC": {
     "symbol": "DOGEBTC",
     "completedChunks": 19,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 241643,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 279947,
     "startedAt": "2025-08-20T13:38:42.119Z"
   },
   "AVAXBTC": {
     "symbol": "AVAXBTC",
     "completedChunks": 19,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 241643,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 279947,
     "startedAt": "2025-08-20T13:38:48.367Z"
   },
   "LINKBTC": {
     "symbol": "LINKBTC",
     "completedChunks": 15,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-03-02T00:04:59.999Z",
-    "totalRecords": 201611,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 279947,
     "startedAt": "2025-08-20T13:38:48.367Z"
   },
   "XLMBTC": {
     "symbol": "XLMBTC",
     "completedChunks": 19,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 241643,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 279947,
     "startedAt": "2025-08-20T13:38:48.367Z"
   },
   "BNBBTC": {
     "symbol": "BNBBTC",
     "completedChunks": 19,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 241643,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 267667,
     "startedAt": "2025-08-20T13:38:53.873Z"
   },
   "POLBTC": {
@@ -97,122 +97,618 @@
   },
   "XLMUSDT": {
     "symbol": "XLMUSDT",
-    "completedChunks": 19,
+    "completedChunks": 24,
     "totalChunks": 19,
-    "lastCompletedTime": "2023-12-31T23:59:59.999Z",
-    "totalRecords": 158690,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 359715,
     "startedAt": "2025-08-20T13:42:30.229Z"
   },
   "XLMETH": {
     "symbol": "XLMETH",
     "completedChunks": 19,
     "totalChunks": 19,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 321411,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 359715,
     "startedAt": "2025-08-20T13:42:30.230Z"
   },
   "XRPBNB": {
     "symbol": "XRPBNB",
-    "completedChunks": 9,
+    "completedChunks": 16,
     "totalChunks": 9,
-    "lastCompletedTime": "2024-09-02T00:04:59.999Z",
-    "totalRecords": 70569,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 201033,
     "startedAt": "2025-08-20T15:20:56.023Z"
   },
   "ADABNB": {
     "symbol": "ADABNB",
     "completedChunks": 19,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 163008,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 201312,
     "startedAt": "2025-08-21T08:23:17.323Z"
   },
   "ADAETH": {
     "symbol": "ADAETH",
-    "completedChunks": 3,
+    "completedChunks": 5,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 30992,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 69296,
     "startedAt": "2025-08-21T08:23:25.954Z"
   },
   "AVAXETH": {
     "symbol": "AVAXETH",
     "completedChunks": 14,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-08-27T21:34:59.999Z",
-    "totalRecords": 107026,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 134722,
     "startedAt": "2025-08-21T08:23:34.896Z"
   },
   "LINKBNB": {
     "symbol": "LINKBNB",
     "completedChunks": 5,
     "totalChunks": 1,
-    "lastCompletedTime": "2025-08-27T21:34:59.999Z",
-    "totalRecords": 49482,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 76296,
     "startedAt": "2025-08-21T08:23:51.019Z"
   },
   "SOLETH": {
     "symbol": "SOLETH",
-    "completedChunks": 10,
+    "completedChunks": 12,
     "totalChunks": 1,
-    "lastCompletedTime": "2024-12-08T22:44:59.999Z",
-    "totalRecords": 81760,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 184016,
     "startedAt": "2025-08-21T08:24:06.418Z"
   },
   "XRPETH": {
     "symbol": "XRPETH",
-    "completedChunks": 1,
+    "completedChunks": 17,
     "totalChunks": 1,
-    "lastCompletedTime": "2024-08-03T23:04:59.999Z",
-    "totalRecords": 1640,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 140468,
     "startedAt": "2025-08-21T08:24:25.972Z"
   },
   "ETHUSDT": {
     "symbol": "ETHUSDT",
     "completedChunks": 20,
     "totalChunks": 49,
-    "lastCompletedTime": "2025-01-01T00:04:59.999Z",
-    "totalRecords": 274534,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 370150,
     "startedAt": "2025-08-21T17:49:29.591Z"
   },
   "ADAUSDT": {
     "symbol": "ADAUSDT",
     "completedChunks": 49,
     "totalChunks": 49,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 263266,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 301570,
     "startedAt": "2025-08-21T18:00:27.691Z"
   },
   "AVAXBNB": {
     "symbol": "AVAXBNB",
     "completedChunks": 49,
     "totalChunks": 49,
-    "lastCompletedTime": "2025-07-19T00:04:59.999Z",
-    "totalRecords": 262597,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 300901,
     "startedAt": "2025-08-21T18:00:27.692Z"
   },
   "AVAXUSDT": {
     "symbol": "AVAXUSDT",
     "completedChunks": 44,
     "totalChunks": 49,
-    "lastCompletedTime": "2025-01-09T10:59:59.999Z",
-    "totalRecords": 284789,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 377970,
     "startedAt": "2025-08-21T18:07:21.649Z"
   },
   "SOLUSDT": {
     "symbol": "SOLUSDT",
     "completedChunks": 13,
     "totalChunks": 13,
-    "lastCompletedTime": "2025-01-01T00:04:59.999Z",
-    "totalRecords": 105421,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 201037,
     "startedAt": "2025-08-28T14:38:12.248Z"
   },
   "XRPUSDT": {
     "symbol": "XRPUSDT",
     "completedChunks": 13,
     "totalChunks": 13,
-    "lastCompletedTime": "2024-12-29T11:19:59.999Z",
-    "totalRecords": 104692,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 201037,
     "startedAt": "2025-08-28T14:38:50.798Z"
+  },
+  "AAVEBTC": {
+    "symbol": "AAVEBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 293263,
+    "startedAt": "2025-11-29T10:51:09.019Z"
+  },
+  "AAVEETH": {
+    "symbol": "AAVEETH",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 277610,
+    "startedAt": "2025-11-29T10:51:09.020Z"
+  },
+  "AAVEUSDT": {
+    "symbol": "AAVEUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 283892,
+    "startedAt": "2025-11-29T10:51:09.020Z"
+  },
+  "ADAUSDC": {
+    "symbol": "ADAUSDC",
+    "completedChunks": 48,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 174492,
+    "startedAt": "2025-11-29T11:04:51.859Z"
+  },
+  "ALGOBTC": {
+    "symbol": "ALGOBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 281622,
+    "startedAt": "2025-11-29T11:04:51.860Z"
+  },
+  "ALGOUSDT": {
+    "symbol": "ALGOUSDT",
+    "completedChunks": 44,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 301169,
+    "startedAt": "2025-11-29T11:09:22.448Z"
+  },
+  "ATOMBTC": {
+    "symbol": "ATOMBTC",
+    "completedChunks": 46,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 270608,
+    "startedAt": "2025-11-29T11:09:22.449Z"
+  },
+  "ATOMUSDC": {
+    "symbol": "ATOMUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 130475,
+    "startedAt": "2025-11-29T11:09:22.449Z"
+  },
+  "ATOMUSDT": {
+    "symbol": "ATOMUSDT",
+    "completedChunks": 46,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 407515,
+    "startedAt": "2025-11-29T11:14:33.961Z"
+  },
+  "BCHBNB": {
+    "symbol": "BCHBNB",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 403547,
+    "startedAt": "2025-11-29T11:33:51.895Z"
+  },
+  "BCHBTC": {
+    "symbol": "BCHBTC",
+    "completedChunks": 48,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 240428,
+    "startedAt": "2025-11-29T11:50:28.525Z"
+  },
+  "BCHUSDC": {
+    "symbol": "BCHUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 117384,
+    "startedAt": "2025-11-29T11:50:28.525Z"
+  },
+  "BCHUSDT": {
+    "symbol": "BCHUSDT",
+    "completedChunks": 48,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 229787,
+    "startedAt": "2025-11-29T11:50:28.526Z"
+  },
+  "BNBETH": {
+    "symbol": "BNBETH",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 292264,
+    "startedAt": "2025-11-29T11:54:33.779Z"
+  },
+  "BNBUSDC": {
+    "symbol": "BNBUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 237343,
+    "startedAt": "2025-11-29T11:54:33.779Z"
+  },
+  "BNBUSDT": {
+    "symbol": "BNBUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 292264,
+    "startedAt": "2025-11-29T12:00:20.612Z"
+  },
+  "BTCUSDC": {
+    "symbol": "BTCUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 289892,
+    "startedAt": "2025-11-29T12:00:20.612Z"
+  },
+  "DOGEUSDT": {
+    "symbol": "DOGEUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 252034,
+    "startedAt": "2025-11-29T12:04:25.507Z"
+  },
+  "DOTBNB": {
+    "symbol": "DOTBNB",
+    "completedChunks": 46,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 295247,
+    "startedAt": "2025-11-29T12:04:25.507Z"
+  },
+  "DOTBTC": {
+    "symbol": "DOTBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:10:14.116Z"
+  },
+  "DOTETH": {
+    "symbol": "DOTETH",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:13:59.066Z"
+  },
+  "DOTUSDT": {
+    "symbol": "DOTUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:17:53.571Z"
+  },
+  "ETCBNB": {
+    "symbol": "ETCBNB",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:21:44.492Z"
+  },
+  "ETCBTC": {
+    "symbol": "ETCBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:25:30.285Z"
+  },
+  "ETCETH": {
+    "symbol": "ETCETH",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:29:21.608Z"
+  },
+  "ETCUSDT": {
+    "symbol": "ETCUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:33:07.708Z"
+  },
+  "ETHUSDC": {
+    "symbol": "ETHUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 373522,
+    "startedAt": "2025-11-29T12:37:25.793Z"
+  },
+  "FILBTC": {
+    "symbol": "FILBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:42:13.797Z"
+  },
+  "FILUSDT": {
+    "symbol": "FILUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:45:59.188Z"
+  },
+  "HBARBNB": {
+    "symbol": "HBARBNB",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:49:43.149Z"
+  },
+  "HBARBTC": {
+    "symbol": "HBARBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:53:27.094Z"
+  },
+  "HBARUSDT": {
+    "symbol": "HBARUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T12:57:12.795Z"
+  },
+  "ICPBTC": {
+    "symbol": "ICPBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:01:11.249Z"
+  },
+  "ICPUSDT": {
+    "symbol": "ICPUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:05:03.746Z"
+  },
+  "LINKUSDC": {
+    "symbol": "LINKUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 281925,
+    "startedAt": "2025-11-29T13:10:15.420Z"
+  },
+  "LINKUSDT": {
+    "symbol": "LINKUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:14:28.312Z"
+  },
+  "LTCBNB": {
+    "symbol": "LTCBNB",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:18:25.783Z"
+  },
+  "LTCBTC": {
+    "symbol": "LTCBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:22:12.914Z"
+  },
+  "LTCETH": {
+    "symbol": "LTCETH",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:26:04.957Z"
+  },
+  "LTCUSDC": {
+    "symbol": "LTCUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 261763,
+    "startedAt": "2025-11-29T13:29:49.322Z"
+  },
+  "LTCUSDT": {
+    "symbol": "LTCUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:33:59.798Z"
+  },
+  "NEARBNB": {
+    "symbol": "NEARBNB",
+    "completedChunks": 26,
+    "totalChunks": 49,
+    "lastCompletedTime": "2023-12-29T09:59:59.999Z",
+    "totalRecords": 219009,
+    "startedAt": "2025-11-29T13:38:03.620Z"
+  },
+  "NEARBTC": {
+    "symbol": "NEARBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 377608,
+    "startedAt": "2025-11-29T13:40:19.001Z"
+  },
+  "NEARUSDT": {
+    "symbol": "NEARUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:43:57.325Z"
+  },
+  "SHIBDOGE": {
+    "symbol": "SHIBDOGE",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:47:39.298Z"
+  },
+  "SHIBUSDT": {
+    "symbol": "SHIBUSDT",
+    "completedChunks": 3,
+    "totalChunks": 49,
+    "lastCompletedTime": "2022-02-03T22:39:59.999Z",
+    "totalRecords": 19282,
+    "startedAt": "2025-11-29T13:51:25.790Z"
+  },
+  "SOLBNB": {
+    "symbol": "SOLBNB",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T13:51:57.394Z"
+  },
+  "SOLUSDC": {
+    "symbol": "SOLUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 289702,
+    "startedAt": "2025-11-29T13:57:00.767Z"
+  },
+  "TRXBNB": {
+    "symbol": "TRXBNB",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:02:03.404Z"
+  },
+  "TRXBTC": {
+    "symbol": "TRXBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:05:49.744Z"
+  },
+  "TRXETH": {
+    "symbol": "TRXETH",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:09:39.638Z"
+  },
+  "TRXUSDC": {
+    "symbol": "TRXUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 217406,
+    "startedAt": "2025-11-29T14:13:32.090Z"
+  },
+  "TRXUSDT": {
+    "symbol": "TRXUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:17:50.132Z"
+  },
+  "TRXXRP": {
+    "symbol": "TRXXRP",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:21:41.467Z"
+  },
+  "UNIBTC": {
+    "symbol": "UNIBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:25:29.723Z"
+  },
+  "UNIUSDT": {
+    "symbol": "UNIUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:29:18.387Z"
+  },
+  "USDCUSDT": {
+    "symbol": "USDCUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 372856,
+    "startedAt": "2025-11-29T14:33:17.287Z"
+  },
+  "VETBNB": {
+    "symbol": "VETBNB",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:37:14.453Z"
+  },
+  "VETBTC": {
+    "symbol": "VETBTC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:40:58.503Z"
+  },
+  "VETETH": {
+    "symbol": "VETETH",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:44:44.301Z"
+  },
+  "VETUSDT": {
+    "symbol": "VETUSDT",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 420801,
+    "startedAt": "2025-11-29T14:48:28.557Z"
+  },
+  "XRPUSDC": {
+    "symbol": "XRPUSDC",
+    "completedChunks": 49,
+    "totalChunks": 49,
+    "lastCompletedTime": "2025-11-29T00:04:59.999Z",
+    "totalRecords": 289702,
+    "startedAt": "2025-11-29T14:58:35.894Z"
   }
 }

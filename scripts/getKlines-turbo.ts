@@ -241,7 +241,7 @@ class ProgressTracker {
 
 class StreamingSaver {
   private prisma: PrismaClient;
-  private readonly BATCH_SIZE = 5000;
+  private readonly BATCH_SIZE = 1000;
   private saveQueue: KlineRecord[] = [];
   private saving = false;
 
@@ -264,6 +264,7 @@ class StreamingSaver {
     
     this.saving = true;
     const toSave = this.saveQueue.splice(0, this.BATCH_SIZE);
+    const symbol = toSave[0]?.symbol || 'Unknown';
     
     try {
       const result = await this.prisma.klines.createMany({
@@ -271,10 +272,10 @@ class StreamingSaver {
         skipDuplicates: true
       });
       
-      console.log(`💾 Saved ${result.count} records (${toSave.length} attempted)`);
+      console.log(`💾 [${symbol}] Saved ${result.count} records (${toSave.length} attempted)`);
       return result.count;
     } catch (error) {
-      console.error('❌ Error saving to database:', error);
+      console.error(`❌ [${symbol}] Error saving to database:`, error);
       // Put records back in queue for retry
       this.saveQueue.unshift(...toSave);
       throw error;
@@ -296,8 +297,8 @@ class TurboKlinesDownloader {
   private prisma: PrismaClient;
   private readonly BINANCE_API_URL = 'https://api.binance.com/api/v3/klines';
   private readonly BATCH_SIZE = 1000; // Max klines per API request
-  private readonly MAX_CONCURRENT_SYMBOLS = 3; // Conservative for stability
-  private readonly MAX_CONCURRENT_CHUNKS = 2; // Per symbol
+  private readonly MAX_CONCURRENT_SYMBOLS = 1; // Conservative for stability
+  private readonly MAX_CONCURRENT_CHUNKS = 1; // Per symbol
   private readonly CHUNK_SIZE_DAYS = 30; // 30-day chunks for manageability
   
   private interval: string;
@@ -385,10 +386,62 @@ class TurboKlinesDownloader {
     return chunks;
   }
 
-  private async downloadChunk(chunk: DownloadChunk, saver: StreamingSaver): Promise<number> {
+  private async verifyChunk(chunk: DownloadChunk, attempt: number = 1): Promise<void> {
+    const { symbol, startTime, endTime } = chunk;
+    const expectedDuration = endTime.getTime() - startTime.getTime();
+    const expectedRecords = Math.floor(expectedDuration / this.intervalMs);
+    
+    // Allow for some flexibility (e.g. maintenance windows, delistings)
+    // But for major gaps, we should retry.
+    
+    const actualRecords = await this.prisma.klines.count({
+      where: {
+        symbol,
+        openTime: {
+          gte: startTime,
+          lt: endTime
+        }
+      }
+    });
+    
+    // If missing more than 1% of data
+    const completeness = actualRecords / expectedRecords;
+    
+    if (completeness < 0.99 && attempt <= 2) { // Retry up to 2 times
+      console.warn(`⚠️ Verification failed for ${symbol} chunk ${chunk.chunkIndex}: ${actualRecords}/${expectedRecords} records (${(completeness*100).toFixed(1)}%). Retrying...`);
+      
+      // Simple retry: Redownload the whole chunk without verification recursion (to avoid infinite loops)
+      // We create a temporary saver just for this retry
+      const retrySaver = new StreamingSaver(this.prisma);
+      await this.downloadChunk(chunk, retrySaver, false); // false = no verify
+      await retrySaver.finalFlush();
+      
+      // Re-verify
+      const afterRetry = await this.prisma.klines.count({
+        where: {
+          symbol,
+          openTime: { gte: startTime, lt: endTime }
+        }
+      });
+      
+      console.log(`🔄 Retry result for ${symbol}: ${afterRetry}/${expectedRecords} (${((afterRetry/expectedRecords)*100).toFixed(1)}%)`);
+      
+      if (afterRetry < actualRecords) {
+        console.error(`❌ Retry made it worse? Database issue possible.`);
+      }
+    } else if (completeness < 0.99) {
+      console.warn(`⚠️ Verification gave up for ${symbol} chunk ${chunk.chunkIndex}: ${(completeness*100).toFixed(1)}% complete.`);
+    } else {
+      // console.log(`✅ Verified ${symbol} chunk ${chunk.chunkIndex}: ${(completeness*100).toFixed(1)}%`);
+    }
+  }
+
+  private async downloadChunk(chunk: DownloadChunk, saver: StreamingSaver, verify = true): Promise<number> {
     const { symbol, startTime, endTime, chunkIndex, totalChunks } = chunk;
     
-    console.log(`📦 [${chunkIndex + 1}/${totalChunks}] ${symbol}: ${startTime.toISOString().split('T')[0]} to ${endTime.toISOString().split('T')[0]}`);
+    if (verify) {
+        console.log(`📦 [${chunkIndex + 1}/${totalChunks}] ${symbol}: ${startTime.toISOString().split('T')[0]} to ${endTime.toISOString().split('T')[0]}`);
+    }
 
     let currentStartTime = startTime.getTime();
     const endTimeMs = endTime.getTime();
@@ -417,7 +470,12 @@ class TurboKlinesDownloader {
         const rawKlines: BinanceKline[] = response.data;
         
         if (rawKlines.length === 0) {
-          break;
+          console.warn(`⚠️ [${symbol}] No klines returned for range ${new Date(currentStartTime).toISOString()} to ${new Date(batchEndTime).toISOString()}`);
+          // If no data returned, maybe it wasn't trading. Move time forward to avoid infinite loop if API returns []
+          // But if we just break, we might miss data if there's a gap.
+          // Best to jump to batchEndTime.
+          currentStartTime = batchEndTime;
+          continue;
         }
 
         // Transform and stream to database
@@ -442,7 +500,9 @@ class TurboKlinesDownloader {
         lastTime = new Date(rawKlines[rawKlines.length - 1][6]);
 
         // Update progress
-        this.progressTracker.updateProgress(symbol, chunkIndex, transformedKlines.length, lastTime);
+        if (verify) { // Only update progress on main run, not retry
+             this.progressTracker.updateProgress(symbol, chunkIndex, transformedKlines.length, lastTime);
+        }
         
         // Success - reduce rate limit delay
         this.rateLimiter.handleSuccess(symbol);
@@ -464,8 +524,16 @@ class TurboKlinesDownloader {
       }
     }
 
-    const progress = this.progressTracker.getProgress(symbol);
-    console.log(`✅ ${symbol} chunk ${chunkIndex + 1}/${totalChunks} complete (${progress.percentage.toFixed(1)}% total, ${totalRecords} records)`);
+    // Force flush to ensure data is in DB for verification
+    if (verify) {
+        await saver.flushQueue();
+        await this.verifyChunk(chunk);
+    }
+    
+    if (verify) {
+        const progress = this.progressTracker.getProgress(symbol);
+        console.log(`✅ ${symbol} chunk ${chunkIndex + 1}/${totalChunks} complete (${progress.percentage.toFixed(1)}% total, ${totalRecords} records)`);
+    }
     
     return totalRecords;
   }

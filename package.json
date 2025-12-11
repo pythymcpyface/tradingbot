@@ -77,7 +77,9 @@
     "clear:production": "npx ts-node scripts/clear-production-orders.ts",
     "clear:ratings": "npx ts-node scripts/clear-glicko-ratings.ts",
     "clear:klines": "npx ts-node scripts/clear-klines.ts",
+    "validate:glicko": "npx ts-node scripts/validate-glicko-integrity.ts",
     "validate:klines": "npx ts-node scripts/validate-klines-data.ts",
+    "verify:klines": "npx ts-node scripts/verify-klines-integrity.ts",
     "getKlines:turbo": "npx ts-node scripts/getKlines-turbo.ts",
     "getKlines:bulk": "npx ts-node scripts/getKlines-bulk.ts",
     "getKlines:resume": "npx ts-node scripts/getKlines-resume.ts"

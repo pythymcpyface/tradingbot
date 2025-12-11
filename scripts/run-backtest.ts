@@ -190,9 +190,9 @@ class GlickoBacktestEngine {
     // Generate signals for the period
     const { signals } = await this.signalGenerator.generateAllSignals(startDate, endDate, symbols);
     
-    // Filter signals by minimum confidence
-    const qualifiedSignals = signals.filter(s => s.confidence >= config.minConfidence);
-    console.log(`📊 Using ${qualifiedSignals.length} qualified signals (min confidence: ${config.minConfidence})`);
+    // Use all generated signals (TradingEngine relies on Z-Score threshold, not confidence score)
+    const qualifiedSignals = signals;
+    console.log(`📊 Using ${qualifiedSignals.length} signals (Confidence filter disabled to match Live Engine)`);
 
     // Sort signals by timestamp
     const sortedSignals = qualifiedSignals.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -549,19 +549,35 @@ async function main() {
 
     await backtester.initialize();
 
-    // Define backtest configuration
-    const config: BacktestConfig = {
-      initialCapital: 10000, // $10,000 starting capital
-      maxPositions: 5, // Maximum simultaneous positions
-      profitTargetPercent: 5, // 5% profit target
-      stopLossPercent: 2.5, // 2.5% stop loss
-      transactionFeePercent: 0.1, // 0.1% transaction fees
-      minConfidence: 0.7 // Minimum 70% confidence for signals
-    };
+    // Parse command line arguments
+    const args = process.argv.slice(2);
+    const params: any = {};
+    
+    args.forEach(arg => {
+      const [key, value] = arg.split('=');
+      if (key && value) {
+        params[key.replace('--', '')] = parseFloat(value);
+      }
+    });
 
-    // Run backtest for the last 30 days
+    // Define backtest configuration with CLI overrides
+    const config: BacktestConfig = {
+      initialCapital: params.capital || 10000, // $10,000 starting capital
+      maxPositions: params.maxPositions || 5, // Maximum simultaneous positions
+      profitTargetPercent: params.tp || 5, // 5% profit target
+      stopLossPercent: params.sl || 2.5, // 2.5% stop loss
+      transactionFeePercent: params.fee || 0.1, // 0.1% transaction fees
+      minConfidence: 0.0 // Disabled to match Live Trading Engine logic
+    };
+    
+    // Z-Score Threshold is handled in Signal Generator, but we can pass it if we update that class
+    // For now, we'll stick to the Generator's internal threshold or env var, 
+    // but let's log the config clearly.
+
+    // Run backtest for the last 30 days (or configured duration)
+    const days = params.days || 30;
     const endDate = new Date();
-    const startDate = new Date(endDate.getTime() - (30 * 24 * 60 * 60 * 1000));
+    const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
 
     console.log(`📅 Backtesting period: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
     console.log(`⚙️ Configuration:`);
@@ -569,7 +585,7 @@ async function main() {
     console.log(`  - Max Positions: ${config.maxPositions}`);
     console.log(`  - Profit Target: ${config.profitTargetPercent}%`);
     console.log(`  - Stop Loss: ${config.stopLossPercent}%`);
-    console.log(`  - Min Confidence: ${config.minConfidence * 100}%`);
+    console.log(`  - Days: ${days}`);
 
     const results = await backtester.runBacktest(startDate, endDate, config);
 
