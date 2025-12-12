@@ -403,6 +403,16 @@ async function main() {
 
     await downloader.cleanup();
 
+    // Run validation script
+    console.log('\n🔍 Running klines validation...');
+    console.log('=' .repeat(60));
+    const { execSync } = require('child_process');
+    try {
+      execSync('npx ts-node scripts/verify-klines-integrity.ts', { stdio: 'inherit' });
+    } catch (validationError) {
+      console.warn('\n⚠️  Klines validation encountered issues (see above)');
+    }
+
   } catch (error) {
     console.error('\n💥 Klines download failed:', error);
     process.exit(1);

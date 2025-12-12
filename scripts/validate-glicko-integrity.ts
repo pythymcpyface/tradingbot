@@ -117,7 +117,17 @@ class GlickoIntegrityValidator {
     console.log('🔍 Starting Glicko Rating Integrity Validation...\n');
 
     try {
-      // 1. Fetch all glicko ratings
+      // 1. Get klines date range and interval
+      console.log('📊 Calculating expected number of records based on klines interval...');
+      const klineInfo = await this.getKlinesDateRangeAndInterval();
+      const expectedRecordsPerCoin = klineInfo.expectedRecordsPerCoin;
+      const expectedTotalRecords = expectedRecordsPerCoin * EXPECTED_COINS.length;
+      console.log(`  Klines interval: ${klineInfo.intervalMinutes} minutes`);
+      console.log(`  Date range: ${klineInfo.startDate.toISOString()} to ${klineInfo.endDate.toISOString()}`);
+      console.log(`  Expected records per coin: ${expectedRecordsPerCoin}`);
+      console.log(`  Expected total records: ${expectedTotalRecords}\n`);
+
+      // 2. Fetch all glicko ratings
       console.log('📊 Loading glicko ratings from database...');
       const ratings = await this.prisma.glickoRatings.findMany({
         orderBy: [{ symbol: 'asc' }, { timestamp: 'asc' }],
@@ -126,6 +136,7 @@ class GlickoIntegrityValidator {
       report.totalRecords = ratings.length;
       const symbols = [...new Set(ratings.map(r => r.symbol))];
       report.symbolsAnalyzed = symbols.length;
+      report.expectedRecords = expectedTotalRecords;
 
       console.log(`✓ Loaded ${report.totalRecords} records for ${report.symbolsAnalyzed} symbols\n`);
 
@@ -162,9 +173,17 @@ class GlickoIntegrityValidator {
       console.log('🔗 Running consistency checks...');
       report.results.consistencyChecks = this.runConsistencyChecks(convertedRatings);
 
-      // 5. Row Count Validation
-      console.log('📋 Validating row count...');
-      report.results.rowCountValidation = this.validateRowCount(report.totalRecords);
+      // 5. Row Count Validation (now based on klines interval)
+      console.log('📋 Validating row count based on klines interval...');
+      report.results.rowCountValidation = this.validateRowCount(report.totalRecords, expectedTotalRecords);
+
+      // 5b. Equal Records Per Coin Check (NEW)
+      console.log('📋 Checking equal records per coin...');
+      const coinsEqualRecords = this.validateCoinsHaveEqualRecords(convertedRatings, expectedRecordsPerCoin);
+      if (!coinsEqualRecords.passed) {
+        report.results.rowCountValidation.issues.push(...coinsEqualRecords.issues);
+        report.results.rowCountValidation.passed = false;
+      }
 
       // 6. Datetime Gap Detection
       console.log('⏰ Detecting datetime gaps...');
@@ -483,22 +502,21 @@ class GlickoIntegrityValidator {
     };
   }
 
-  private validateRowCount(totalRecords: number): {
+  private validateRowCount(totalRecords: number, expectedTotalRecords: number): {
     passed: boolean;
     expected: number;
     actual: number;
     issues: string[];
   } {
-    const EXPECTED = 21; // 21 total coins expected
     const issues: string[] = [];
 
-    if (totalRecords !== EXPECTED) {
-      issues.push(`Expected ${EXPECTED} records but found ${totalRecords}`);
+    if (totalRecords !== expectedTotalRecords) {
+      issues.push(`Expected ${expectedTotalRecords} total records but found ${totalRecords}`);
     }
 
     return {
-      passed: totalRecords === EXPECTED,
-      expected: EXPECTED,
+      passed: totalRecords === expectedTotalRecords,
+      expected: expectedTotalRecords,
       actual: totalRecords,
       issues,
     };
@@ -792,6 +810,90 @@ class GlickoIntegrityValidator {
     parts.push(`Volatility: ${report.results.statisticalAnalysis.volatilityRange.min.toFixed(4)}-${report.results.statisticalAnalysis.volatilityRange.max.toFixed(4)} (μ=${report.results.statisticalAnalysis.volatilityRange.mean.toFixed(4)})`);
 
     return parts.join('\n');
+  }
+
+  /**
+   * Get klines date range and calculate expected number of records
+   */
+  private async getKlinesDateRangeAndInterval(): Promise<{
+    startDate: Date;
+    endDate: Date;
+    intervalMinutes: number;
+    expectedRecordsPerCoin: number;
+  }> {
+    // Get date range from klines
+    const dateRange = await this.prisma.klines.aggregate({
+      _min: { openTime: true },
+      _max: { closeTime: true },
+    });
+
+    if (!dateRange._min.openTime || !dateRange._max.closeTime) {
+      throw new Error('No klines data found');
+    }
+
+    const startDate = dateRange._min.openTime;
+    const endDate = dateRange._max.closeTime;
+
+    // Get first few records to determine interval
+    const firstRecords = await this.prisma.klines.findMany({
+      where: { symbol: 'BTCUSDT' },
+      orderBy: { openTime: 'asc' },
+      take: 2,
+      select: { openTime: true },
+    });
+
+    let intervalMinutes = 60; // default to hourly
+    if (firstRecords.length === 2) {
+      const diff = firstRecords[1].openTime.getTime() - firstRecords[0].openTime.getTime();
+      intervalMinutes = Math.round(diff / 1000 / 60);
+    }
+
+    // Calculate expected number of records
+    const timeRangeMs = endDate.getTime() - startDate.getTime();
+    const intervalMs = intervalMinutes * 60 * 1000;
+    const expectedRecordsPerCoin = Math.ceil(timeRangeMs / intervalMs) + 1; // +1 for inclusive range
+
+    return {
+      startDate,
+      endDate,
+      intervalMinutes,
+      expectedRecordsPerCoin,
+    };
+  }
+
+  /**
+   * Validate that all coins have equal number of rating calculations
+   */
+  private validateCoinsHaveEqualRecords(
+    ratings: Array<{ symbol: string; timestamp: Date; rating: number; rd: number; volatility: number; }>,
+    expectedRecordsPerCoin: number
+  ): { passed: boolean; issues: string[] } {
+    const issues: string[] = [];
+    const coinCounts = new Map<string, number>();
+
+    // Count records per coin
+    for (const rating of ratings) {
+      const count = (coinCounts.get(rating.symbol) || 0) + 1;
+      coinCounts.set(rating.symbol, count);
+    }
+
+    // Check if all coins have same count
+    const counts = Array.from(coinCounts.values());
+    const uniqueCounts = [...new Set(counts)];
+
+    if (uniqueCounts.length > 1) {
+      issues.push(`Coins have different record counts: ${Array.from(coinCounts.entries()).map(([coin, count]) => `${coin}=${count}`).join(', ')}`);
+    }
+
+    // Check against expected
+    if (uniqueCounts.length === 1 && uniqueCounts[0] !== expectedRecordsPerCoin) {
+      issues.push(`All coins have ${uniqueCounts[0]} records but expected ${expectedRecordsPerCoin}`);
+    }
+
+    return {
+      passed: issues.length === 0 && uniqueCounts.length === 1 && uniqueCounts[0] === expectedRecordsPerCoin,
+      issues,
+    };
   }
 }
 

@@ -357,7 +357,9 @@ class GlickoCalculatorFixed {
   private async processKlinesChunk(
     chunkKlines: any[],
     coinStates: Map<string, CoinRatingState>,
-    allHistoricalKlines: Map<string, KlineData[]>
+    allHistoricalKlines: Map<string, KlineData[]>,
+    results: Map<string, Array<{ timestamp: Date; rating: GlickoRating; performanceScore: number }>>,
+    chunkEndTime: Date
   ): Promise<void> {
     // Group klines by timestamp within this chunk
     const klinesByTimestamp = new Map<string, KlineData[]>();
@@ -418,6 +420,17 @@ class GlickoCalculatorFixed {
           // Process ratings in batches to maintain stability
           if (coinState.gamesBatch.length >= this.BATCH_SIZE) {
             coinState.currentRating = this.updateGlickoRating(coinState.currentRating, coinState.gamesBatch);
+
+            // Calculate average performance score for this batch
+            const avgPerformanceScore = coinState.gamesBatch.reduce((sum, game) => sum + game.score, 0) / coinState.gamesBatch.length;
+
+            // Store result for this batch
+            results.get(coin)!.push({
+              timestamp: new Date(timestamp),
+              rating: { ...coinState.currentRating },
+              performanceScore: avgPerformanceScore * 9.99 // Scale to 0-9.99 range
+            });
+
             coinState.gamesBatch = []; // Clear processed games
           }
         }
@@ -451,7 +464,7 @@ class GlickoCalculatorFixed {
 
     // Step 2: Initialize rating states for all coins
     const coinStates = new Map<string, CoinRatingState>();
-    
+
     for (const coin of coins) {
       coinStates.set(coin, {
         currentRating: {
@@ -468,7 +481,7 @@ class GlickoCalculatorFixed {
     console.log('📊 Loading all klines data...');
     const allPairs = Array.from(coinPairs.values()).flat();
     const uniquePairs = [...new Set(allPairs)];
-    
+
     console.log(`  Loading data for ${uniquePairs.length} unique trading pairs...`);
     console.log('  📊 Using chunked processing to handle large datasets efficiently...');
 
@@ -524,7 +537,7 @@ class GlickoCalculatorFixed {
         totalProcessedKlines += chunkKlines.length;
 
         // Process this chunk of data with historical klines tracking
-        await this.processKlinesChunk(chunkKlines, coinStates, allHistoricalKlines);
+        await this.processKlinesChunk(chunkKlines, coinStates, allHistoricalKlines, results, chunkEndTime);
       } else {
         console.log(`    ⚪ No data found for this time period`);
       }
@@ -541,16 +554,16 @@ class GlickoCalculatorFixed {
 
     // Process final rating updates for any remaining games in batches
     console.log('\n🔄 Processing final rating updates...');
-    
+
     for (const coin of coins) {
       const coinState = coinStates.get(coin)!;
-      
+
       if (coinState.gamesBatch.length > 0) {
         coinState.currentRating = this.updateGlickoRating(coinState.currentRating, coinState.gamesBatch);
-        
+
         // Calculate average performance score for this batch
         const avgPerformanceScore = coinState.gamesBatch.reduce((sum, game) => sum + game.score, 0) / coinState.gamesBatch.length;
-        
+
         // Store result
         results.get(coin)!.push({
           timestamp: endTime, // Use end time as final timestamp
@@ -562,12 +575,14 @@ class GlickoCalculatorFixed {
 
     // Step 5: Save all results to database
     console.log('\n💾 Saving results to database...');
-    
+
     for (const coin of coins) {
       const coinResults = results.get(coin) || [];
       if (coinResults.length > 0) {
         await this.saveRatings(coin, coinResults);
         console.log(`  ✅ Saved ${coinResults.length} ratings for ${coin}`);
+      } else {
+        console.log(`  ⚠️ No results for ${coin}`);
       }
     }
 
@@ -812,6 +827,16 @@ async function main() {
     await calculator.calculateAllRatings(coins, startTime, endTime);
 
     console.log('\n🎉 CORRECTED Glicko-2 rating calculation completed successfully!');
+
+    // Run validation script
+    console.log('\n🔍 Running glicko ratings validation...');
+    console.log('=' .repeat(70));
+    const { execSync } = require('child_process');
+    try {
+      execSync('npx ts-node scripts/validate-glicko-integrity.ts', { stdio: 'inherit' });
+    } catch (validationError) {
+      console.warn('\n⚠️  Glicko ratings validation encountered issues (see above)');
+    }
 
   } catch (error) {
     console.error('\n💥 Glicko-2 rating calculation failed:', error);
