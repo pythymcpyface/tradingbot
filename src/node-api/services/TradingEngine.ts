@@ -4,6 +4,9 @@ import { RustCoreService } from './RustCoreService';
 import { ZScoreSignal, TradingParameterSet, ActivePosition, PaperPosition } from '../../types';
 import { Logger, LogLevel } from '../../services/Logger';
 import { AllocationManager } from '../../services/AllocationManager';
+import { SignalGeneratorService, RatingInput } from '../../services/SignalGeneratorService';
+import { OCOOrderService } from '../../services/OCOOrderService';
+import { GlickoEngine } from '../../services/GlickoEngine';
 
 export interface TradingConfig {
   zScoreThreshold: number;
@@ -48,6 +51,9 @@ export class TradingEngine extends EventEmitter {
   private paperPositions: Map<string, PaperPosition> = new Map();
   private logger: Logger;
   private allocationManager: AllocationManager;
+  private signalGenerator: SignalGeneratorService;
+  private ocoOrderService: OCOOrderService;
+  private glickoEngine: GlickoEngine;
 
   constructor(
     binanceService: BinanceService,
@@ -60,6 +66,9 @@ export class TradingEngine extends EventEmitter {
     this.config = config;
     this.logger = new Logger('./logs', LogLevel.INFO);
     this.allocationManager = new AllocationManager();
+    this.signalGenerator = new SignalGeneratorService();
+    this.ocoOrderService = new OCOOrderService();
+    this.glickoEngine = new GlickoEngine();
     
     this.state = {
       isRunning: false,
@@ -223,152 +232,77 @@ export class TradingEngine extends EventEmitter {
         return;
       }
 
-      // STEP 1: Calculate mean and standard deviation of ALL coins' Glicko ratings for this interval
-      const allRatingValues = ratings.map(r => parseFloat(r.rating.toString()));
-      const meanRating = allRatingValues.reduce((sum, rating) => sum + rating, 0) / allRatingValues.length;
-      const variance = allRatingValues.reduce((sum, rating) => sum + Math.pow(rating - meanRating, 2), 0) / allRatingValues.length;
-      const stdDevRating = Math.sqrt(variance);
-      
-      console.log(`📊 Cross-coin statistics for this interval: mean=${meanRating.toFixed(1)}, σ=${stdDevRating.toFixed(1)} across ${ratings.length} coins`);
-      
-      // STEP 2: Calculate Z-scores for each coin and update their Z-score history
-      const currentZScores: { [symbol: string]: number } = {};
-      
-      for (const rating of ratings) {
-        const tradingSymbol = `${rating.symbol}USDT`;
-        const ratingValue = parseFloat(rating.rating.toString());
-        
-        // Z-score = (current_rating - mean_of_all_coins) / std_dev_of_all_coins
-        const zScore = stdDevRating > 0 ? (ratingValue - meanRating) / stdDevRating : 0;
-        currentZScores[tradingSymbol] = zScore;
-        
-        // Store this Z-score in the coin's history for moving average calculation
-        if (!this.zScoreHistory) {
-          this.zScoreHistory = new Map();
-        }
-        if (!this.zScoreHistory.has(tradingSymbol)) {
-          this.zScoreHistory.set(tradingSymbol, []);
-        }
-        
-        const history = this.zScoreHistory.get(tradingSymbol)!;
-        history.push({
-          timestamp: new Date(),
-          zScore: zScore,
-          rating: ratingValue
-        });
-        
-        // Keep only the history we need (limit to max moving average period needed)
-        const maxPeriod = Math.max(...Array.from(this.state.parameterSets.values()).map(p => p.movingAverages));
-        if (history.length > maxPeriod + 10) { // Keep a few extra for safety
-          history.shift();
-        }
-      }
-      
-      // STEP 2.5: Ensure sufficient Z-score history for proper moving average calculation
-      for (const rating of ratings) {
-        const tradingSymbol = `${rating.symbol}USDT`;
-        const params = this.getParametersForSymbol(tradingSymbol);
-        const movingAveragesPeriod = params.movingAverages;
-        
-        // Only pre-populate history for symbols that can actually trade
-        if (this.state.parameterSets.has(tradingSymbol)) {
-          await this.ensureZScoreHistory(rating.symbol, movingAveragesPeriod, ratings);
-        }
-      }
-      
-      // STEP 3: Calculate moving averages of Z-scores and generate signals
-      const allSignals: ZScoreSignal[] = [];
+      // Convert ratings to RatingInput format for SignalGeneratorService
+      const ratingInputs: RatingInput[] = ratings.map(r => ({
+        symbol: r.symbol,
+        rating: parseFloat(r.rating.toString()),
+        timestamp: r.timestamp || new Date()
+      }));
+
+      // Use SignalGeneratorService to generate signals
+      const result = this.signalGenerator.generateSignals(ratingInputs, this.state.parameterSets);
+
+      console.log(`📊 Cross-coin statistics: mean=${result.statistics.meanRating.toFixed(1)}, σ=${result.statistics.stdDevRating.toFixed(1)} across ${result.statistics.totalCoins} coins`);
+
+      // Store z-scores for reversal detection and emit events
       const tradingSymbolData: any[] = [];
       const monitoringSymbolData: any[] = [];
-      
-      console.log(`\n📊 MARKET OVERVIEW - Mean Glicko Rating: ${meanRating.toFixed(1)} across ${ratings.length} coins`);
-      console.log(`   Cross-coin statistics: σ=${stdDevRating.toFixed(1)}`);
-      
-      for (const rating of ratings) {
-        const tradingSymbol = `${rating.symbol}USDT`;
-        const ratingValue = parseFloat(rating.rating.toString());
-        const currentZScore = currentZScores[tradingSymbol];
-        
-        // Get parameter set for moving average period
-        const params = this.getParametersForSymbol(tradingSymbol);
-        const movingAveragesPeriod = params.movingAverages;
-        
-        // Calculate moving average of Z-scores
-        const history = this.zScoreHistory?.get(tradingSymbol) || [];
-        let movingAverageZScore = currentZScore; // Default to current if insufficient history
-        
-        if (history.length >= movingAveragesPeriod) {
-          const recentZScores = history.slice(-movingAveragesPeriod);
-          movingAverageZScore = recentZScores.reduce((sum, h) => sum + h.zScore, 0) / recentZScores.length;
-        }
-        
-        // Emit z-score data for database storage
-        const isEnabledForTrading = this.state.parameterSets.has(tradingSymbol);
-        this.emit('zScoreCalculated', {
-          symbol: tradingSymbol,
-          timestamp: new Date(),
-          zScore: currentZScore,
-          rating: ratingValue,
-          movingAverageZScore: movingAverageZScore,
-          zScoreThreshold: params.zScoreThreshold,
-          movingAveragesPeriod: movingAveragesPeriod,
-          isEnabledForTrading: isEnabledForTrading
-        });
-        
-        // Store current z-score for ALL symbols (needed for reversal detection)
-        this.previousZScores.set(tradingSymbol, movingAverageZScore);
-        
-        // Get threshold and determine if this symbol can trade
-        const isInParameterSet = this.state.parameterSets.has(tradingSymbol);
-        const threshold = isInParameterSet ? params.zScoreThreshold : this.config.zScoreThreshold;
-        
-        // Collect data for organized logging
-        const symbolData = {
-          symbol: tradingSymbol,
-          currentZScore,
-          movingAverageZScore,
-          threshold,
-          ratingValue,
-          movingAveragesPeriod,
-          historyLength: history.length,
-          isTrading: isInParameterSet
-        };
-        
-        if (isInParameterSet) {
-          tradingSymbolData.push(symbolData);
-        } else {
-          monitoringSymbolData.push(symbolData);
-        }
-        
-        await this.logger.info('Z_SCORE', `Z-score calculated for ${tradingSymbol}`, {
-          currentZScore,
-          movingAverageZScore,
-          threshold,
-          rating: ratingValue,
-          meanRating: meanRating,
-          stdDevRating: stdDevRating,
-          movingAveragesPeriod,
-          historyLength: history.length,
-          canTrade: isInParameterSet
-        });
-        
-        // STEP 4: Generate trading signals based on moving average Z-score threshold
-        if (isInParameterSet && Math.abs(movingAverageZScore) >= params.zScoreThreshold) {
-          const signal = movingAverageZScore > 0 ? 'BUY' : 'SELL';
-          console.log(`🚨 [${tradingSymbol}] TRADING SIGNAL TRIGGERED: ${signal} (MA Z-score: ${movingAverageZScore.toFixed(3)} >= ±${params.zScoreThreshold})`);
-          
-          allSignals.push({
-            symbol: tradingSymbol,
+
+      for (const [symbol, zScoreData] of result.zScores) {
+        const baseSymbol = symbol.replace('USDT', '');
+        const rating = ratingInputs.find(r => `${r.symbol}USDT` === symbol);
+
+        if (rating && zScoreData.movingAverage !== null) {
+          const params = this.getParametersForSymbol(symbol);
+          const isEnabledForTrading = this.state.parameterSets.has(symbol);
+
+          // Emit z-score data for database storage
+          this.emit('zScoreCalculated', {
+            symbol,
             timestamp: new Date(),
-            currentRating: ratingValue,
-            movingAverage: meanRating,
-            standardDeviation: stdDevRating,
-            zScore: movingAverageZScore,
-            signal: signal as 'BUY' | 'SELL'
+            zScore: zScoreData.current,
+            rating: rating.rating,
+            movingAverageZScore: zScoreData.movingAverage,
+            zScoreThreshold: params.zScoreThreshold,
+            movingAveragesPeriod: params.movingAverages,
+            isEnabledForTrading
+          });
+
+          // Store for reversal detection
+          this.previousZScores.set(symbol, zScoreData.movingAverage);
+
+          // Collect data for logging
+          const symbolData = {
+            symbol,
+            currentZScore: zScoreData.current,
+            movingAverageZScore: zScoreData.movingAverage,
+            threshold: params.zScoreThreshold,
+            ratingValue: rating.rating,
+            movingAveragesPeriod: params.movingAverages,
+            historyLength: zScoreData.historyLength,
+            isTrading: isEnabledForTrading
+          };
+
+          if (isEnabledForTrading) {
+            tradingSymbolData.push(symbolData);
+          } else {
+            monitoringSymbolData.push(symbolData);
+          }
+
+          await this.logger.info('Z_SCORE', `Z-score calculated for ${symbol}`, {
+            currentZScore: zScoreData.current,
+            movingAverageZScore: zScoreData.movingAverage,
+            threshold: params.zScoreThreshold,
+            rating: rating.rating,
+            meanRating: result.statistics.meanRating,
+            stdDevRating: result.statistics.stdDevRating,
+            movingAveragesPeriod: params.movingAverages,
+            historyLength: zScoreData.historyLength,
+            canTrade: isEnabledForTrading
           });
         }
       }
-      
+
       // Display organized trading symbols information
       if (tradingSymbolData.length > 0) {
         console.log(`\n🎯 TRADING SYMBOLS:`);
@@ -376,11 +310,11 @@ export class TradingEngine extends EventEmitter {
           const currentZDisplay = data.currentZScore > 0 ? `+${data.currentZScore.toFixed(3)}` : data.currentZScore.toFixed(3);
           const maZDisplay = data.movingAverageZScore > 0 ? `+${data.movingAverageZScore.toFixed(3)}` : data.movingAverageZScore.toFixed(3);
           const historyStatus = data.historyLength >= data.movingAveragesPeriod ? `${data.movingAveragesPeriod} periods)` : `${data.historyLength}/${data.movingAveragesPeriod} periods)`;
-          
+
           console.log(`   [${data.symbol}] Current Z: ${currentZDisplay} | MA Z-score: ${maZDisplay} (${historyStatus} | Threshold: ±${data.threshold} | Rating: ${data.ratingValue.toFixed(0)} | TRADING ENABLED`);
         });
       }
-      
+
       // Display monitoring symbols in a compact format
       if (monitoringSymbolData.length > 0) {
         console.log(`\n📊 MONITORING SYMBOLS:`);
@@ -389,7 +323,7 @@ export class TradingEngine extends EventEmitter {
           const maZDisplay = data.movingAverageZScore > 0 ? `+${data.movingAverageZScore.toFixed(3)}` : data.movingAverageZScore.toFixed(3);
           monitoringLines.push(`[${data.symbol}] MA Z: ${maZDisplay}`);
         });
-        
+
         // Display monitoring symbols in rows of 3
         for (let i = 0; i < monitoringLines.length; i += 3) {
           const row = monitoringLines.slice(i, i + 3).join(' | ');
@@ -397,7 +331,12 @@ export class TradingEngine extends EventEmitter {
         }
       }
 
-      const signals = allSignals;
+      // Log signals from SignalGeneratorService
+      for (const signal of result.signals) {
+        console.log(`🚨 [${signal.symbol}] TRADING SIGNAL: ${signal.signal} (MA Z-score: ${signal.zScore.toFixed(3)} >= threshold)`);
+      }
+
+      const signals = result.signals;
 
       // Enhance signals with additional data from ratings
       for (const signal of signals) {
@@ -809,365 +748,188 @@ export class TradingEngine extends EventEmitter {
   }
 
   /**
-   * Calculate real-time Glicko ratings from live market data for paper trading
+   * Calculate real-time Glicko ratings from live market data using pairwise algorithm
+   * This matches the canonical implementation in calculateGlickoRatings-fixed.ts
    */
   private async calculateRealTimeRatings(): Promise<any[]> {
     try {
       const ratings: any[] = [];
       const now = new Date();
-      
+
       // Get all BASE_COINS from environment to monitor (exclude USDT since USDTUSDT is invalid)
       const baseCoins = (process.env.BASE_COINS?.split(',').map(coin => coin.trim()) || [])
         .filter(coin => coin !== 'USDT');
-      const monitoringSymbols = baseCoins.map(coin => `${coin}USDT`);
-      
-      console.log(`📊 Monitoring ${monitoringSymbols.length} symbols for Glicko rating calculations: ${monitoringSymbols.join(', ')}`);
-      await this.logger.info('MONITORING', `Calculating Glicko ratings for all BASE_COINS`, { 
-        totalSymbols: monitoringSymbols.length, 
-        symbols: monitoringSymbols,
+
+      console.log(`📊 Calculating pairwise Glicko ratings for ${baseCoins.length} coins: ${baseCoins.join(', ')}`);
+      await this.logger.info('MONITORING', `Calculating pairwise Glicko ratings for all BASE_COINS`, {
+        totalCoins: baseCoins.length,
+        coins: baseCoins,
         tradingSymbols: this.config.symbols
       });
-      
-      // Get recent price data for each symbol in BASE_COINS
-      for (const symbol of monitoringSymbols) {
-        const baseAsset = symbol.replace('USDT', '');
-        
-        try {
-          // Get parameter set for this symbol to determine movingAverages period
-          const params = this.getParametersForSymbol(symbol);
-          const movingAveragesPeriod = params.movingAverages;
-          
-          // Fetch enough klines for Glicko calculations (need extra for historical comparison)
-          const totalPeriodsNeeded = Math.max(50, movingAveragesPeriod * 2); // Ensure we have enough data
 
-          await this.logger.debug('DATA', `Fetching ${totalPeriodsNeeded} klines for ${symbol} (movingAverages: ${movingAveragesPeriod})`);
-          console.log(`🔍 Fetching ${totalPeriodsNeeded} klines for ${symbol} (MA period: ${movingAveragesPeriod})...`);
-
-          const klines = await this.binanceService.getKlines(
-            symbol,
-            '1h',
-            Date.now() - totalPeriodsNeeded * 60 * 60 * 1000, // totalPeriodsNeeded * 1 hour * 60 minutes * 60 seconds * 1000ms
-            undefined,
-            totalPeriodsNeeded
-          );
-
-          await this.logger.debug('DATA', `Retrieved ${klines?.length || 0} klines for ${symbol}`);
-          console.log(`📊 Got ${klines?.length || 0} klines for ${symbol}`);
-
-          if (klines && klines.length >= movingAveragesPeriod) {
-            // Calculate Glicko ratings for each 1-hour interval
-            const glickoRatings = await this.calculateGlickoRatingsForIntervals(symbol, klines, movingAveragesPeriod);
-            
-            if (glickoRatings.length > 0) {
-              // Calculate moving average of Glicko ratings
-              const recentRatings = glickoRatings.slice(-movingAveragesPeriod);
-              const ratingValues = recentRatings.map(r => r.rating);
-              
-              // Calculate statistics
-              const averageRating = ratingValues.reduce((sum, r) => sum + r, 0) / ratingValues.length;
-              const variance = ratingValues.reduce((sum, r) => sum + Math.pow(r - averageRating, 2), 0) / ratingValues.length;
-              const standardDeviation = Math.sqrt(variance);
-              
-              // Latest rating for current signal
-              const latestRating = glickoRatings[glickoRatings.length - 1];
-              
-              ratings.push({
-                symbol: baseAsset,
-                timestamp: now,
-                rating: latestRating.rating,
-                ratingDeviation: latestRating.ratingDeviation,
-                volatility: latestRating.volatility,
-                movingAverageRating: averageRating,
-                standardDeviation: standardDeviation,
-                movingAveragesPeriod: movingAveragesPeriod,
-                glickoRatingsCount: glickoRatings.length
-              });
-              
-              await this.logger.info('RATINGS', `Glicko ratings calculated for ${baseAsset}`, {
-                latestRating: latestRating.rating,
-                movingAverage: averageRating,
-                standardDeviation: standardDeviation,
-                movingAveragesPeriod: movingAveragesPeriod,
-                totalRatings: glickoRatings.length,
-                klinesCount: klines.length
-              });
-              
-              console.log(`📊 ${baseAsset}: rating=${latestRating.rating.toFixed(0)}, MA=${averageRating.toFixed(0)}, σ=${standardDeviation.toFixed(1)}, periods=${movingAveragesPeriod}, total=${glickoRatings.length}`);
-            } else {
-              await this.logger.warn('RATINGS', `Failed to calculate Glicko ratings for ${symbol}`, { klinesCount: klines.length });
-              console.warn(`⚠️ Failed to calculate Glicko ratings for ${symbol}`);
-            }
-          } else {
-            await this.logger.warn('DATA', `Insufficient klines data for ${symbol}`, { 
-              klinesCount: klines?.length || 0, 
-              required: movingAveragesPeriod 
-            });
-            console.warn(`⚠️ Insufficient klines data for ${symbol}: ${klines?.length || 0} periods (need ${movingAveragesPeriod})`);
-          }
-        } catch (error) {
-          await this.logger.error('DATA', `Failed to get data for ${symbol}`, { error: (error as Error).message });
-          console.warn(`⚠️ Failed to get data for ${symbol}:`, (error as Error).message);
+      // Determine how many periods to fetch based on max moving average period needed
+      let maxMovingAveragesPeriod = 50; // Default minimum
+      for (const paramSet of this.state.parameterSets.values()) {
+        if (paramSet.movingAverages > maxMovingAveragesPeriod) {
+          maxMovingAveragesPeriod = paramSet.movingAverages;
         }
       }
-      
+
+      const totalPeriodsNeeded = Math.max(50, maxMovingAveragesPeriod * 2);
+      console.log(`🔍 Fetching ${totalPeriodsNeeded} periods of data for pairwise calculation...`);
+
+      // Calculate pairwise ratings using GlickoEngine
+      const pairwiseRatings = await this.calculatePairwiseRatings(baseCoins, totalPeriodsNeeded);
+
+      if (pairwiseRatings.size === 0) {
+        console.warn('⚠️ No pairwise ratings calculated');
+        return [];
+      }
+
+      // Convert to format expected by signal generation
+      for (const coin of baseCoins) {
+        const ratingData = pairwiseRatings.get(coin);
+        if (ratingData) {
+          ratings.push({
+            symbol: coin,
+            timestamp: now,
+            rating: ratingData.rating,
+            ratingDeviation: ratingData.ratingDeviation,
+            volatility: ratingData.volatility
+          });
+
+          await this.logger.info('RATINGS', `Pairwise Glicko rating calculated for ${coin}`, {
+            rating: ratingData.rating,
+            ratingDeviation: ratingData.ratingDeviation,
+            volatility: ratingData.volatility
+          });
+        } else {
+          await this.logger.warn('RATINGS', `No pairwise rating calculated for ${coin}`);
+        }
+      }
+
+      console.log(`✅ Calculated ${ratings.length} pairwise Glicko ratings`);
       return ratings;
     } catch (error) {
-      console.error('Error calculating real-time ratings:', error);
+      console.error('Error calculating real-time pairwise ratings:', error);
+      await this.logger.error('RATINGS', 'Failed to calculate pairwise ratings', { error: (error as Error).message });
       return [];
     }
   }
 
   /**
-   * Calculate Glicko-2 ratings for each 1-hour interval based on price performance
+   * Calculate pairwise Glicko-2 ratings using GlickoEngine (matches calculateGlickoRatings-fixed.ts)
+   * This method processes trading pairs (BTCETH, ETHBNB, etc.) to generate ratings for each coin
    */
-  private async calculateGlickoRatingsForIntervals(symbol: string, klines: any[], movingAveragesPeriod: number): Promise<any[]> {
-    try {
-      const ratings: any[] = [];
-      const baseAsset = symbol.replace('USDT', '');
-      
-      // Glicko-2 constants
-      const initialRating = 1500;
-      const initialRatingDeviation = 350;
-      const initialVolatility = 0.06;
-      const tau = 0.5; // System constant (volatility change)
-      
-      console.log(`🔢 Calculating Glicko ratings for ${baseAsset} over ${klines.length} intervals (MA: ${movingAveragesPeriod})`);
-      
-      // Start with initial Glicko values
-      let currentRating = initialRating;
-      let currentRatingDeviation = initialRatingDeviation;
-      let currentVolatility = initialVolatility;
-      
-      // Calculate ratings for each interval (starting from the second kline since we need price changes)
-      for (let i = 1; i < klines.length; i++) {
-        const prevKline = klines[i - 1];
-        const currKline = klines[i];
-        
-        // Calculate price performance for this interval
-        const priceChange = (currKline.close - prevKline.close) / prevKline.close;
-        const volumeRatio = currKline.volume / (prevKline.volume || 1);
-        
-        // Convert price performance to a pseudo-game result
-        // Positive price change = "win", negative = "loss", neutral = "draw"
-        let gameResult: number;
-        if (Math.abs(priceChange) < 0.001) { // < 0.1% change = draw
-          gameResult = 0.5;
-        } else if (priceChange > 0) { // Price up = win
-          gameResult = Math.min(1.0, 0.5 + priceChange * 50); // Scale performance
-        } else { // Price down = loss
-          gameResult = Math.max(0.0, 0.5 + priceChange * 50); // Scale performance
+  private async calculatePairwiseRatings(baseCoins: string[], periodsToFetch: number): Promise<Map<string, { rating: number; ratingDeviation: number; volatility: number }>> {
+    const engine = new GlickoEngine();
+    const now = new Date();
+
+    // Initialize all coins in the engine
+    for (const coin of baseCoins) {
+      engine.ensureCoinExists(coin, now);
+    }
+
+    // 1. Find relevant trading pairs
+    const tradingPairs: Array<{ pair: string; base: string; quote: string }> = [];
+    for (const base of baseCoins) {
+      for (const quote of baseCoins) {
+        if (base !== quote) {
+          tradingPairs.push({ pair: `${base}${quote}`, base, quote });
         }
-        
-        // Calculate opponent rating based on market conditions
-        // Higher volume = stronger opponent, higher volatility = stronger opponent
-        const marketVolatility = this.calculateVolatility(klines.slice(Math.max(0, i - 10), i + 1));
-        const opponentRating = initialRating + (marketVolatility * 1000) + (Math.log(volumeRatio) * 100);
-        const opponentRatingDeviation = initialRatingDeviation;
-        
-        // Perform Glicko-2 update (simplified version)
-        const updatedRating = this.updateGlickoRating(
-          currentRating,
-          currentRatingDeviation,
-          currentVolatility,
-          opponentRating,
-          opponentRatingDeviation,
-          gameResult,
-          tau
+      }
+    }
+
+    console.log(`🔍 Processing ${tradingPairs.length} potential trading pairs for pairwise Glicko calculation...`);
+
+    // 2. Fetch klines for all pairs (5-minute intervals)
+    const startTime = Date.now() - (periodsToFetch * 5 * 60 * 1000);
+    const klinesByPair = new Map<string, any[]>();
+
+    for (const { pair, base, quote } of tradingPairs) {
+      try {
+        const klines = await this.binanceService.getKlines(
+          pair,
+          '5m',
+          startTime,
+          undefined,
+          periodsToFetch
         );
-        
-        currentRating = updatedRating.rating;
-        currentRatingDeviation = updatedRating.ratingDeviation;
-        currentVolatility = updatedRating.volatility;
-        
-        ratings.push({
-          interval: i,
-          timestamp: new Date(currKline.openTime),
-          rating: currentRating,
-          ratingDeviation: currentRatingDeviation,
-          volatility: currentVolatility,
-          priceChange: priceChange,
-          gameResult: gameResult,
-          opponentRating: opponentRating,
-          close: currKline.close,
-          volume: currKline.volume
+
+        if (klines && klines.length > 0) {
+          klinesByPair.set(pair, klines);
+          console.log(`  ✓ ${pair}: fetched ${klines.length} klines`);
+        }
+      } catch (error) {
+        // Pair doesn't exist on Binance, skip silently
+      }
+    }
+
+    if (klinesByPair.size === 0) {
+      console.warn('⚠️ No trading pair klines available for pairwise calculation');
+      return new Map();
+    }
+
+    console.log(`📊 Found ${klinesByPair.size} active trading pairs`);
+
+    // 3. Group all klines by timestamp and process chronologically
+    const klinesByTimestamp = new Map<string, Array<{ pair: string; kline: any }>>();
+
+    for (const [pair, klines] of klinesByPair) {
+      for (const kline of klines) {
+        const timestamp = new Date(kline.openTime).toISOString();
+        if (!klinesByTimestamp.has(timestamp)) {
+          klinesByTimestamp.set(timestamp, []);
+        }
+        klinesByTimestamp.get(timestamp)!.push({ pair, kline });
+      }
+    }
+
+    const timestamps = Array.from(klinesByTimestamp.keys()).sort();
+    console.log(`⏱️  Processing ${timestamps.length} time intervals...`);
+
+    // 4. Process each timestamp
+    for (const timestamp of timestamps) {
+      const timestampData = klinesByTimestamp.get(timestamp)!;
+
+      for (const { pair, kline } of timestampData) {
+        // Find base and quote from pair name
+        const pairInfo = tradingPairs.find(p => p.pair === pair);
+        if (!pairInfo) continue;
+
+        const { base, quote } = pairInfo;
+        const priceChange = (kline.close - kline.open) / kline.open;
+        const tsDate = new Date(timestamp);
+
+        // Process game with volume metrics if available
+        const volumeMetrics = kline.takerBuyBaseAssetVolume ? {
+          volume: kline.volume,
+          takerBuyVolume: kline.takerBuyBaseAssetVolume
+        } : undefined;
+
+        engine.processGame(base, quote, priceChange, tsDate, volumeMetrics);
+      }
+
+      // Normalize ratings after each interval to prevent drift
+      engine.normalizeRatings();
+    }
+
+    // 5. Extract final ratings for all coins
+    const finalRatings = new Map<string, { rating: number; ratingDeviation: number; volatility: number }>();
+
+    for (const coin of baseCoins) {
+      const state = engine.getCoinState(coin);
+      if (state) {
+        finalRatings.set(coin, {
+          rating: state.rating.rating,
+          ratingDeviation: state.rating.ratingDeviation,
+          volatility: state.rating.volatility
         });
+        console.log(`  ${coin}: rating=${state.rating.rating.toFixed(0)}, RD=${state.rating.ratingDeviation.toFixed(1)}, σ=${state.rating.volatility.toFixed(3)}`);
       }
-      
-      await this.logger.debug('GLICKO', `Calculated ${ratings.length} Glicko ratings for ${baseAsset}`, {
-        finalRating: currentRating,
-        initialRating: initialRating,
-        ratingChange: currentRating - initialRating,
-        intervals: ratings.length
-      });
-      
-      console.log(`🔢 ${baseAsset}: ${ratings.length} intervals calculated, final rating: ${currentRating.toFixed(0)} (change: ${(currentRating - initialRating).toFixed(0)})`);
-      
-      return ratings;
-    } catch (error) {
-      console.error(`Error calculating Glicko ratings for ${symbol}:`, error);
-      return [];
     }
-  }
 
-  /**
-   * Simplified Glicko-2 rating update
-   */
-  private updateGlickoRating(
-    rating: number,
-    ratingDeviation: number,
-    volatility: number,
-    opponentRating: number,
-    opponentRatingDeviation: number,
-    gameResult: number,
-    tau: number
-  ): { rating: number; ratingDeviation: number; volatility: number } {
-    // Convert to Glicko-2 scale
-    const mu = (rating - 1500) / 173.7178;
-    const phi = ratingDeviation / 173.7178;
-    const sigma = volatility;
-    const muOpponent = (opponentRating - 1500) / 173.7178;
-    const phiOpponent = opponentRatingDeviation / 173.7178;
-    
-    // Calculate g(phi) function
-    const g = (phi: number) => 1 / Math.sqrt(1 + 3 * phi * phi / (Math.PI * Math.PI));
-    
-    // Calculate E function (expected score)
-    const E = (mu: number, muOpponent: number, phiOpponent: number) => 
-      1 / (1 + Math.exp(-g(phiOpponent) * (mu - muOpponent)));
-    
-    const gPhi = g(phiOpponent);
-    const expectedScore = E(mu, muOpponent, phiOpponent);
-    const variance = 1 / (gPhi * gPhi * expectedScore * (1 - expectedScore));
-    
-    // Simplified volatility update (skip iterative calculation for performance)
-    const delta = variance * gPhi * (gameResult - expectedScore);
-    const newSigma = Math.sqrt(sigma * sigma + delta * delta / variance);
-    
-    // Update rating deviation
-    const newPhiSquared = 1 / (1 / (phi * phi + newSigma * newSigma) + 1 / variance);
-    const newPhi = Math.sqrt(newPhiSquared);
-    
-    // Update rating
-    const newMu = mu + newPhiSquared * gPhi * (gameResult - expectedScore);
-    
-    // Convert back to Glicko scale
-    return {
-      rating: newMu * 173.7178 + 1500,
-      ratingDeviation: newPhi * 173.7178,
-      volatility: Math.min(0.2, Math.max(0.01, newSigma)) // Bound volatility
-    };
-  }
-
-  /**
-   * Calculate price volatility from kline data
-   */
-  private calculateVolatility(klines: any[]): number {
-    if (klines.length < 2) return 0.1; // Default volatility
-    
-    const returns = [];
-    for (let i = 1; i < klines.length; i++) {
-      const prevPrice = klines[i - 1].close;
-      const currPrice = klines[i].close;
-      const logReturn = Math.log(currPrice / prevPrice);
-      returns.push(logReturn);
-    }
-    
-    // Calculate standard deviation of returns
-    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-    return Math.sqrt(variance);
-  }
-
-  /**
-   * Ensure sufficient Z-score history for moving average calculation
-   * If history is insufficient, pre-populate from historical klines intervals
-   */
-  private async ensureZScoreHistory(symbol: string, movingAveragesPeriod: number, allRatings: any[]): Promise<void> {
-    const tradingSymbol = `${symbol}USDT`;
-    
-    // Check if we already have sufficient history
-    const existingHistory = this.zScoreHistory.get(tradingSymbol) || [];
-    if (existingHistory.length >= movingAveragesPeriod) {
-      return; // Already have enough history
-    }
-    
-    try {
-      await this.logger.info('Z_SCORE_HISTORY', `Pre-populating Z-score history for ${symbol}`, {
-        currentHistoryLength: existingHistory.length,
-        requiredPeriods: movingAveragesPeriod
-      });
-      
-      // Calculate how many additional intervals we need
-      const periodsNeeded = movingAveragesPeriod - existingHistory.length + 5; // Extra for safety
-
-      // Fetch historical klines
-      const klines = await this.binanceService.getKlines(
-        tradingSymbol,
-        '1h',
-        Date.now() - periodsNeeded * 60 * 60 * 1000,
-        undefined,
-        periodsNeeded
-      );
-
-      if (!klines || klines.length < 2) {
-        console.warn(`⚠️ Insufficient historical klines for ${symbol}, using current Z-score for moving average`);
-        return;
-      }
-
-      // Calculate Glicko ratings for each historical interval
-      const historicalRatings = await this.calculateGlickoRatingsForIntervals(tradingSymbol, klines, movingAveragesPeriod);
-      
-      if (historicalRatings.length === 0) {
-        console.warn(`⚠️ Failed to calculate historical Glicko ratings for ${symbol}`);
-        return;
-      }
-      
-      // For each historical rating interval, we need to calculate its Z-score
-      // relative to the market at that time. We'll approximate using current market composition
-      const historicalZScores: Array<{ timestamp: Date; zScore: number; rating: number }> = [];
-      
-      for (let i = 0; i < historicalRatings.length; i++) {
-        const historicalRating = historicalRatings[i];
-        
-        // Approximate Z-score calculation using current market mean/std as proxy
-        // This is a simplification - ideally we'd have the full market state for each interval
-        const currentMeanRating = allRatings.reduce((sum, r) => sum + parseFloat(r.rating.toString()), 0) / allRatings.length;
-        const ratingValues = allRatings.map(r => parseFloat(r.rating.toString()));
-        const variance = ratingValues.reduce((sum, rating) => sum + Math.pow(rating - currentMeanRating, 2), 0) / ratingValues.length;
-        const currentStdDevRating = Math.sqrt(variance);
-        
-        const approximateZScore = currentStdDevRating > 0 ? 
-          (historicalRating.rating - currentMeanRating) / currentStdDevRating : 0;
-        
-        historicalZScores.push({
-          timestamp: historicalRating.timestamp,
-          zScore: approximateZScore,
-          rating: historicalRating.rating
-        });
-      }
-      
-      // Initialize or update the Z-score history for this symbol
-      if (!this.zScoreHistory.has(tradingSymbol)) {
-        this.zScoreHistory.set(tradingSymbol, []);
-      }
-      
-      const history = this.zScoreHistory.get(tradingSymbol)!;
-      
-      // Add historical Z-scores to the beginning, keeping most recent data
-      const combinedHistory = [...historicalZScores.slice(-movingAveragesPeriod), ...existingHistory];
-      
-      // Keep only what we need
-      history.length = 0; // Clear existing
-      history.push(...combinedHistory.slice(-movingAveragesPeriod - 2)); // Keep a bit extra
-      
-      console.log(`📈 Pre-populated Z-score history for ${symbol}: ${history.length} intervals (needed: ${movingAveragesPeriod})`);
-      
-    } catch (error) {
-      console.error(`Error pre-populating Z-score history for ${symbol}:`, error);
-      await this.logger.error('Z_SCORE_HISTORY', `Failed to pre-populate history for ${symbol}`, {
-        error: (error as Error).message
-      });
-    }
+    return finalRatings;
   }
 
   /**
