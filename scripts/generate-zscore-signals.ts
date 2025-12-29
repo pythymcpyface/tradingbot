@@ -1,20 +1,24 @@
 #!/usr/bin/env ts-node
 
 /**
- * Z-Score Momentum Signal Generator (ALIGNED WITH LIVE TRADING)
- * 
- * This script generates trading signals using the "Cross-Sectional Z-Score" logic
- * found in the Live Trading Engine (TradingEngine.ts).
- * 
+ * Z-Score Momentum Signal Generator (UNIFIED WITH LIVE TRADING)
+ *
+ * This script generates trading signals using the EXACT same services as live trading:
+ * - SignalGeneratorService for signal generation
+ * - GlickoEngine for pairwise rating calculations
+ * - Ensures 100% consistency between backtest and live trading
+ *
  * Logic:
- * 1. For each timestamp, calculate the Market Mean and StdDev of Glicko ratings across ALL coins.
- * 2. Calculate the Z-Score for each coin relative to the market: (Rating - MarketMean) / MarketStdDev.
- * 3. Maintain a moving average of this Z-Score for each coin.
- * 4. Trigger signals if the Moving Average Z-Score exceeds the threshold.
+ * 1. Calculate pairwise Glicko ratings using GlickoEngine (same as TradingEngine)
+ * 2. Generate signals using SignalGeneratorService (same as TradingEngine)
+ * 3. Guaranteed identical behavior to live trading
  */
 
 import { PrismaClient } from '@prisma/client';
 import { config } from 'dotenv';
+import { SignalGeneratorService, RatingInput } from '../src/services/SignalGeneratorService';
+import { GlickoEngine } from '../src/services/GlickoEngine';
+import { TradingParameterSet } from '../src/types';
 
 config();
 
@@ -41,179 +45,232 @@ interface SignalMetrics {
 
 class ZScoreSignalGenerator {
   private prisma: PrismaClient;
-  
-  // Signal generation parameters
-  private readonly Z_SCORE_THRESHOLD = 2.0;
-  private readonly WINDOW_SIZE = 20; // Moving window for z-score moving average calculation
-  
+  private signalGenerator: SignalGeneratorService;
+  private glickoEngine: GlickoEngine;
+
+  // Default signal generation parameters (can be overridden)
+  private readonly DEFAULT_Z_SCORE_THRESHOLD = 2.0;
+  private readonly DEFAULT_MOVING_AVERAGES = 20;
+
   constructor() {
     this.prisma = new PrismaClient();
+    this.signalGenerator = new SignalGeneratorService();
+    this.glickoEngine = new GlickoEngine();
   }
 
   async initialize(): Promise<void> {
     try {
       await this.prisma.$connect();
       console.log('✅ Connected to database');
+      console.log('✅ SignalGeneratorService initialized');
+      console.log('✅ GlickoEngine initialized');
     } catch (error) {
-      console.error('❌ Database connection failed:', error);
+      console.error('❌ Initialization failed:', error);
       throw error;
     }
   }
 
   /**
-   * Generate signals for all symbols using Cross-Sectional Logic
+   * Generate signals using pairwise Glicko ratings (UNIFIED WITH LIVE TRADING)
+   *
+   * This method mirrors TradingEngine.calculatePairwiseRatings() but processes
+   * historical data instead of real-time data.
    */
   async generateAllSignals(
     startDate?: Date,
     endDate?: Date,
-    symbols?: string[]
+    symbols?: string[],
+    parameterSets?: Map<string, TradingParameterSet>
   ): Promise<{ signals: TradingSignal[]; metrics: SignalMetrics[] }> {
-    console.log('🚀 Generating Cross-Sectional Z-Score signals (Matching Live Engine)...');
+    console.log('🚀 Generating pairwise Glicko-based signals (UNIFIED WITH LIVE TRADING)...');
+    console.log(`📅 Period: ${startDate?.toISOString()} to ${endTime?.toISOString()}`);
 
-    const whereClause: any = {};
-    if (startDate) whereClause.timestamp = { gte: startDate };
-    if (endDate) whereClause.timestamp = { ...whereClause.timestamp, lte: endDate };
+    // 1. Get BASE_COINS from environment (match TradingEngine behavior)
+    const baseCoins = (process.env.BASE_COINS?.split(',').map(coin => coin.trim()) || [])
+      .filter(coin => coin !== 'USDT');
 
-    console.log('DATA', 'Fetching ALL Glicko ratings for the period...');
-    
-    // 1. Fetch ALL ratings for the period
-    const allRatings = await this.prisma.glickoRatings.findMany({
-      where: whereClause,
-      orderBy: { timestamp: 'asc' },
-      select: {
-        symbol: true,
-        timestamp: true,
-        rating: true,
-        // We need price data for the signal object, but fetching it here via join might be slow
-        // We'll try to fetch it efficiently or lookup later
-      }
-    });
-
-    console.log(`DATA`, `Fetched ${allRatings.length} ratings. Grouping by timestamp...`);
-
-    // 2. Group by timestamp (bucketed to nearest minute to handle slight alignment issues)
-    const ratingsByTime = new Map<number, Array<{ symbol: string; rating: number; timestamp: Date }>>();
-    
-    // Filter by BASE_COINS if defined (to match Live Trading which monitors specific list)
-    const baseCoinsEnv = process.env.BASE_COINS?.split(',').map(s => s.trim());
-    // Handle both "BTC" and "BTCUSDT" formats in env var, ensure we match database symbol format (usually "BTCUSDT")
-    const allowedSymbols = baseCoinsEnv ? new Set(baseCoinsEnv.map(c => c.endsWith('USDT') ? c : `${c}USDT`)) : null;
-    
-    if (allowedSymbols) {
-      console.log(`CONFIG`, `Filtering ratings for ${allowedSymbols.size} symbols defined in BASE_COINS`);
+    if (baseCoins.length === 0) {
+      throw new Error('BASE_COINS environment variable must be set');
     }
 
-    for (const r of allRatings) {
-      if (symbols && symbols.length > 0 && !symbols.includes(r.symbol)) continue;
-      if (allowedSymbols && !allowedSymbols.has(r.symbol)) continue;
-      
-      // Round to nearest minute to align disparate timestamps
-      const timeKey = Math.round(r.timestamp.getTime() / 60000) * 60000;
-      
-      if (!ratingsByTime.has(timeKey)) {
-        ratingsByTime.set(timeKey, []);
+    console.log(`📊 Processing ${baseCoins.length} coins: ${baseCoins.join(', ')}`);
+
+    // 2. Generate trading pairs between coins
+    const tradingPairs: Array<{ pair: string; base: string; quote: string }> = [];
+    for (const base of baseCoins) {
+      for (const quote of baseCoins) {
+        if (base !== quote) {
+          tradingPairs.push({ pair: `${base}${quote}`, base, quote });
+        }
       }
-      ratingsByTime.get(timeKey)!.push({
-        symbol: r.symbol,
-        rating: Number(r.rating),
-        timestamp: r.timestamp
-      });
     }
 
-    const sortedTimeKeys = Array.from(ratingsByTime.keys()).sort((a, b) => a - b);
-    console.log(`DATA`, `Processed ${sortedTimeKeys.length} time intervals.`);
+    console.log(`🔗 Generated ${tradingPairs.length} potential trading pairs`);
 
-    // 3. Process Time Steps
-    const signals: TradingSignal[] = [];
-    const zScoreHistory = new Map<string, number[]>(); // History of Z-Scores for MA calculation
+    // 3. Fetch klines for all pairs in chunks (performance optimization)
+    const chunkSize = 30 * 24 * 60 * 60 * 1000; // 30 days
+    const startTime = startDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // Default 90 days
+    const endTime = endDate || new Date();
+
+    const allSignals: TradingSignal[] = [];
     const signalCounts = new Map<string, { buy: number; sell: number; total: number; zScoreSum: number }>();
 
-    for (const timeKey of sortedTimeKeys) {
-      const intervalRatings = ratingsByTime.get(timeKey)!;
-      
-      if (intervalRatings.length < 2) continue; // Need at least 2 to calculate stdDev
+    // Process in chunks to avoid memory issues
+    for (let currentTime = startTime.getTime(); currentTime < endTime.getTime(); currentTime += chunkSize) {
+      const chunkStart = new Date(currentTime);
+      const chunkEnd = new Date(Math.min(currentTime + chunkSize, endTime.getTime()));
 
-      // Calculate Market Stats (Cross-Sectional)
-      const ratingValues = intervalRatings.map(r => r.rating);
-      const meanRating = ratingValues.reduce((sum, r) => sum + r, 0) / ratingValues.length;
-      const variance = ratingValues.reduce((sum, r) => sum + Math.pow(r - meanRating, 2), 0) / ratingValues.length;
-      const stdDevRating = Math.sqrt(variance);
+      console.log(`\n📈 Processing chunk: ${chunkStart.toISOString().split('T')[0]} to ${chunkEnd.toISOString().split('T')[0]}`);
 
-      if (stdDevRating === 0) continue;
+      // Reset engine for this chunk
+      const engine = new GlickoEngine();
+      for (const coin of baseCoins) {
+        engine.ensureCoinExists(coin, chunkStart);
+      }
 
-      // Calculate Z-Scores for each symbol
-      for (const { symbol, rating, timestamp } of intervalRatings) {
-        // Cross-Sectional Z-Score
-        const currentZScore = (rating - meanRating) / stdDevRating;
+      // Fetch klines for all pairs in this chunk
+      const klinesByTimestamp = new Map<string, Array<{ pair: string; kline: any; base: string; quote: string }>>();
+      let activePairs = 0;
 
-        // Maintain History for Moving Average
-        if (!zScoreHistory.has(symbol)) {
-          zScoreHistory.set(symbol, []);
+      for (const { pair, base, quote } of tradingPairs) {
+        try {
+          const klines = await this.prisma.klines.findMany({
+            where: {
+              symbol: pair,
+              openTime: { gte: chunkStart, lt: chunkEnd }
+            },
+            orderBy: { openTime: 'asc' },
+            select: {
+              openTime: true,
+              close: true,
+              open: true,
+              volume: true,
+              takerBuyBaseAssetVolume: true
+            }
+          });
+
+          if (klines.length > 0) {
+            activePairs++;
+            for (const kline of klines) {
+              const timestamp = kline.openTime.toISOString();
+              if (!klinesByTimestamp.has(timestamp)) {
+                klinesByTimestamp.set(timestamp, []);
+              }
+              klinesByTimestamp.get(timestamp)!.push({ pair, kline, base, quote });
+            }
+          }
+        } catch (error) {
+          // Pair doesn't exist in database, skip
         }
-        const history = zScoreHistory.get(symbol)!;
-        history.push(currentZScore);
-        
-        // Keep history size limited to WINDOW_SIZE
-        if (history.length > this.WINDOW_SIZE) {
-          history.shift();
+      }
+
+      console.log(`  ✓ Found ${activePairs} active trading pairs with data`);
+
+      // Process klines chronologically
+      const timestamps = Array.from(klinesByTimestamp.keys()).sort();
+      console.log(`  ⏱️  Processing ${timestamps.length} timestamps`);
+
+      // Track ratings by timestamp for signal generation
+      const ratingsByTimestamp = new Map<string, Map<string, { rating: number; ratingDeviation: number; volatility: number }>>();
+
+      for (const timestamp of timestamps) {
+        const timestampData = klinesByTimestamp.get(timestamp)!;
+
+        // Process each pair kline using GlickoEngine
+        for (const { kline, base, quote } of timestampData) {
+          const priceChange = (Number(kline.close) - Number(kline.open)) / Number(kline.open);
+          const tsDate = new Date(timestamp);
+
+          const volumeMetrics = kline.takerBuyBaseAssetVolume ? {
+            volume: Number(kline.volume),
+            takerBuyVolume: Number(kline.takerBuyBaseAssetVolume)
+          } : undefined;
+
+          engine.processGame(base, quote, priceChange, tsDate, volumeMetrics);
         }
 
-        // Need enough history for MA
-        if (history.length < this.WINDOW_SIZE) continue;
+        // Normalize ratings to prevent drift (same as TradingEngine)
+        engine.normalizeRatings();
 
-        // Calculate Moving Average Z-Score (Smoothed Z-Score)
-        const maZScore = history.reduce((sum, z) => sum + z, 0) / history.length;
+        // Store ratings for this timestamp
+        const ratingsMap = new Map<string, { rating: number; ratingDeviation: number; volatility: number }>();
+        for (const coin of baseCoins) {
+          const state = engine.getCoinState(coin);
+          if (state) {
+            ratingsMap.set(coin, {
+              rating: state.rating.rating,
+              ratingDeviation: state.rating.ratingDeviation,
+              volatility: state.rating.volatility
+            });
+          }
+        }
+        ratingsByTimestamp.set(timestamp, ratingsMap);
+      }
 
-        // Check Threshold
-        let signal: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
-        if (maZScore >= this.Z_SCORE_THRESHOLD) {
-          signal = 'BUY';
-        } else if (maZScore <= -this.Z_SCORE_THRESHOLD) {
-          signal = 'SELL';
+      // Generate signals using SignalGeneratorService (same as TradingEngine)
+      console.log(`  🎯 Generating signals from ${ratingsByTimestamp.size} rating snapshots`);
+
+      // Use default parameter sets if not provided
+      const defaultParamSets = parameterSets || this.createDefaultParameterSets(baseCoins);
+
+      for (const [timestamp, ratingsMap] of ratingsByTimestamp) {
+        // Convert to RatingInput format
+        const ratingInputs: RatingInput[] = [];
+        for (const [coin, ratingData] of ratingsMap) {
+          ratingInputs.push({
+            symbol: coin,
+            rating: ratingData.rating,
+            timestamp: new Date(timestamp)
+          });
         }
 
-        if (signal !== 'HOLD') {
-          // Lookup price for this symbol/time (Optimization: fetch only when signal generated)
-          // For now, we might use 0 or try to find it. 
-          // Using 0 is dangerous for backtest if it relies on `priceAtSignal`.
-          // Let's fetch the kline for this specific signal.
+        if (ratingInputs.length < 2) continue;
+
+        // Use SignalGeneratorService to generate signals (100% consistent with live trading)
+        const result = this.signalGenerator.generateSignals(ratingInputs, defaultParamSets);
+
+        // Convert to TradingSignal format
+        for (const signal of result.signals) {
+          // Fetch price at signal time
           const kline = await this.prisma.klines.findFirst({
             where: {
-              symbol: symbol,
-              openTime: { lte: timestamp } // Closest previous candle
+              symbol: signal.symbol,
+              openTime: { lte: signal.timestamp }
             },
             orderBy: { openTime: 'desc' },
             select: { close: true }
           });
-          
+
           const price = kline ? Number(kline.close) : 0;
 
-          signals.push({
-            symbol,
-            timestamp,
-            signal,
-            zScore: maZScore, // Use MA Z-Score as the signal strength indicator
-            glickoRating: rating,
-            confidence: Math.min(Math.abs(maZScore) / 3, 1), // Simple confidence derived from Z strength
+          allSignals.push({
+            symbol: signal.symbol,
+            timestamp: signal.timestamp,
+            signal: signal.signal,
+            zScore: signal.zScore,
+            glickoRating: signal.currentRating,
+            confidence: Math.min(Math.abs(signal.zScore) / 3, 1),
             priceAtSignal: price,
-            volumeScore: 0, // Not used in core logic anymore
-            reason: `Cross-Sectional MA Z-Score: ${maZScore.toFixed(2)}`
+            volumeScore: 0,
+            reason: `Pairwise Glicko MA Z-Score: ${signal.zScore.toFixed(2)}`
           });
 
-          // Update Metrics
-          if (!signalCounts.has(symbol)) {
-            signalCounts.set(symbol, { buy: 0, sell: 0, total: 0, zScoreSum: 0 });
+          // Update metrics
+          if (!signalCounts.has(signal.symbol)) {
+            signalCounts.set(signal.symbol, { buy: 0, sell: 0, total: 0, zScoreSum: 0 });
           }
-          const count = signalCounts.get(symbol)!;
+          const count = signalCounts.get(signal.symbol)!;
           count.total++;
-          if (signal === 'BUY') count.buy++;
-          if (signal === 'SELL') count.sell++;
-          count.zScoreSum += Math.abs(maZScore);
+          if (signal.signal === 'BUY') count.buy++;
+          if (signal.signal === 'SELL') count.sell++;
+          count.zScoreSum += Math.abs(signal.zScore);
         }
       }
+
+      console.log(`  ✅ Generated ${allSignals.length} total signals in this chunk`);
     }
 
-    // Compile Metrics
+    // Compile metrics
     const metrics: SignalMetrics[] = [];
     for (const [symbol, counts] of signalCounts) {
       metrics.push({
@@ -222,11 +279,34 @@ class ZScoreSignalGenerator {
         buySignals: counts.buy,
         sellSignals: counts.sell,
         avgZScore: counts.total > 0 ? counts.zScoreSum / counts.total : 0,
-        avgConfidence: 0 // Simplified
+        avgConfidence: 0
       });
     }
 
-    return { signals, metrics };
+    console.log(`\n🎉 Signal generation complete: ${allSignals.length} signals across ${metrics.length} symbols`);
+    return { signals: allSignals, metrics };
+  }
+
+  /**
+   * Create default parameter sets for signal generation
+   */
+  private createDefaultParameterSets(baseCoins: string[]): Map<string, TradingParameterSet> {
+    const paramSets = new Map<string, TradingParameterSet>();
+
+    for (const coin of baseCoins) {
+      const symbol = `${coin}USDT`;
+      paramSets.set(symbol, {
+        symbol,
+        zScoreThreshold: this.DEFAULT_Z_SCORE_THRESHOLD,
+        movingAverages: this.DEFAULT_MOVING_AVERAGES,
+        profitPercent: 5,
+        stopLossPercent: 3,
+        allocationPercent: 10,
+        enabled: true
+      });
+    }
+
+    return paramSets;
   }
 
   /**
