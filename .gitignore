@@ -139,3 +139,13 @@ backtest/*.csv
 
 # Prisma
 prisma/migrations/
+
+# Development analysis documents (temporary working files)
+GLICKO_ENGINE_REVIEW.md
+GLICKO_TDD_SUMMARY.md
+RATING_DRIFT_ANALYSIS.md
+scripts/analyze-rating-drift.ts
+scripts/debug-drift.ts
+
+# AI instructions (per CLAUDE.md rules - should not be committed)
+GEMINI.md

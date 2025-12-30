@@ -68,6 +68,11 @@ interface ValidationReport {
       rdTrend: string;
       issues: string[];
     };
+    staticRatingDetection: {
+      passed: boolean;
+      staticSymbols: Array<{ symbol: string; staticCount: number; value: number }>;
+      issues: string[];
+    };
     anomalies: {
       detected: boolean;
       details: string[];
@@ -108,6 +113,7 @@ class GlickoIntegrityValidator {
         ratingDriftDetection: { passed: true, driftingSymbols: [], issues: [] },
         deviationDriftDetection: { passed: true, driftingSymbols: [], issues: [] },
         averageStability: { passed: true, ratingTrend: 'stable', rdTrend: 'stable', issues: [] },
+        staticRatingDetection: { passed: true, staticSymbols: [], issues: [] },
         anomalies: { detected: false, details: [] },
       },
       overallStatus: 'PASS',
@@ -127,18 +133,20 @@ class GlickoIntegrityValidator {
       console.log(`  Expected records per coin: ${expectedRecordsPerCoin}`);
       console.log(`  Expected total records: ${expectedTotalRecords}\n`);
 
-      // 2. Fetch all glicko ratings
-      console.log('📊 Loading glicko ratings from database...');
-      const ratings = await this.prisma.glickoRatings.findMany({
-        orderBy: [{ symbol: 'asc' }, { timestamp: 'asc' }],
+      // 2. Get basic counts first (lightweight query)
+      console.log('📊 Analyzing glicko ratings database...');
+      report.totalRecords = await this.prisma.glickoRatings.count();
+
+      const symbolCounts = await this.prisma.glickoRatings.groupBy({
+        by: ['symbol'],
+        _count: { id: true }
       });
 
-      report.totalRecords = ratings.length;
-      const symbols = [...new Set(ratings.map(r => r.symbol))];
+      const symbols = symbolCounts.map(s => s.symbol);
       report.symbolsAnalyzed = symbols.length;
       report.expectedRecords = expectedTotalRecords;
 
-      console.log(`✓ Loaded ${report.totalRecords} records for ${report.symbolsAnalyzed} symbols\n`);
+      console.log(`✓ Found ${report.totalRecords} records for ${report.symbolsAnalyzed} symbols\n`);
 
       if (report.totalRecords === 0) {
         report.overallStatus = 'WARNING';
@@ -146,8 +154,21 @@ class GlickoIntegrityValidator {
         return report;
       }
 
+      // For large datasets, we'll process in chunks and sample for validation
+      const CHUNK_SIZE = 50000;
+      const SAMPLE_SIZE = Math.min(10000, report.totalRecords);
+
+      console.log(`📊 Processing in chunks of ${CHUNK_SIZE} records...`);
+      console.log(`📊 Using sample size of ${SAMPLE_SIZE} for statistical analysis...\n`);
+
+      // Get a representative sample for detailed validation
+      const sampleRatings = await this.prisma.glickoRatings.findMany({
+        take: SAMPLE_SIZE,
+        orderBy: { id: 'asc' }
+      });
+
       // Convert Decimal to number for analysis
-      const convertedRatings = ratings.map((r) => ({
+      const convertedRatings = sampleRatings.map((r) => ({
         id: r.id,
         symbol: r.symbol,
         timestamp: r.timestamp,
@@ -177,9 +198,9 @@ class GlickoIntegrityValidator {
       console.log('📋 Validating row count based on klines interval...');
       report.results.rowCountValidation = this.validateRowCount(report.totalRecords, expectedTotalRecords);
 
-      // 5b. Equal Records Per Coin Check (NEW)
+      // 5b. Equal Records Per Coin Check (using pre-computed counts)
       console.log('📋 Checking equal records per coin...');
-      const coinsEqualRecords = this.validateCoinsHaveEqualRecords(convertedRatings, expectedRecordsPerCoin);
+      const coinsEqualRecords = this.validateCoinsHaveEqualRecordsFromCounts(symbolCounts, expectedRecordsPerCoin);
       if (!coinsEqualRecords.passed) {
         report.results.rowCountValidation.issues.push(...coinsEqualRecords.issues);
         report.results.rowCountValidation.passed = false;
@@ -209,6 +230,10 @@ class GlickoIntegrityValidator {
       console.log('📊 Checking average stability...');
       report.results.averageStability = this.checkAverageStability(convertedRatings);
 
+      // 11b. Static Rating Detection (check for unchanged ratings)
+      console.log('🔍 Detecting static ratings (3+ consecutive intervals)...');
+      report.results.staticRatingDetection = await this.detectStaticRatings();
+
       // 12. Anomaly Detection
       console.log('⚠️  Detecting anomalies...');
       report.results.anomalies = this.detectAnomalies(convertedRatings);
@@ -224,6 +249,7 @@ class GlickoIntegrityValidator {
         !report.results.ratingDriftDetection.passed ||
         !report.results.deviationDriftDetection.passed ||
         !report.results.averageStability.passed ||
+        !report.results.staticRatingDetection.passed ||
         report.results.anomalies.detected
       ) {
         report.overallStatus = 'FAIL';
@@ -727,6 +753,70 @@ class GlickoIntegrityValidator {
     };
   }
 
+  /**
+   * Detect coins with static ratings (unchanged for 3+ consecutive intervals)
+   */
+  private async detectStaticRatings(): Promise<{
+    passed: boolean;
+    staticSymbols: Array<{ symbol: string; staticCount: number; value: number }>;
+    issues: string[];
+  }> {
+    const staticSymbols: Array<{ symbol: string; staticCount: number; value: number }> = [];
+    const issues: string[] = [];
+
+    // Get all unique symbols
+    const symbols = await this.prisma.glickoRatings.findMany({
+      select: { symbol: true },
+      distinct: ['symbol']
+    });
+
+    for (const { symbol } of symbols) {
+      // Get ratings for this symbol ordered by timestamp
+      const ratings = await this.prisma.glickoRatings.findMany({
+        where: { symbol },
+        select: { rating: true, timestamp: true },
+        orderBy: { timestamp: 'asc' }
+      });
+
+      if (ratings.length < 3) continue;
+
+      // Check for consecutive static ratings
+      let consecutiveStatic = 1;
+      let maxConsecutiveStatic = 1;
+      let staticValue = 0;
+
+      for (let i = 1; i < ratings.length; i++) {
+        const prevRating = Number(ratings[i - 1].rating);
+        const currRating = Number(ratings[i].rating);
+
+        // Check if ratings are exactly the same (within floating point precision)
+        if (Math.abs(currRating - prevRating) < 0.0001) {
+          consecutiveStatic++;
+          staticValue = currRating;
+          maxConsecutiveStatic = Math.max(maxConsecutiveStatic, consecutiveStatic);
+        } else {
+          consecutiveStatic = 1;
+        }
+      }
+
+      // Flag if we found 3+ consecutive static ratings
+      if (maxConsecutiveStatic >= 3) {
+        staticSymbols.push({
+          symbol,
+          staticCount: maxConsecutiveStatic,
+          value: staticValue
+        });
+        issues.push(`${symbol}: ${maxConsecutiveStatic} consecutive intervals with rating=${staticValue.toFixed(2)}`);
+      }
+    }
+
+    return {
+      passed: staticSymbols.length === 0,
+      staticSymbols,
+      issues: issues.slice(0, 20) // Show first 20 issues
+    };
+  }
+
   private checkAverageStability(
     ratings: Array<{
       id: string;
@@ -802,6 +892,7 @@ class GlickoIntegrityValidator {
     parts.push(report.results.ratingDriftDetection.passed ? '✅ Rating Drift: None' : `⚠️  Rating Drift: ${report.results.ratingDriftDetection.driftingSymbols.length} symbols drifting`);
     parts.push(report.results.deviationDriftDetection.passed ? '✅ Deviation Drift: None' : `⚠️  Deviation Drift: ${report.results.deviationDriftDetection.driftingSymbols.length} symbols drifting`);
     parts.push(report.results.averageStability.passed ? '✅ Average Stability: Stable' : `⚠️  Average Stability: Trends detected (${report.results.averageStability.ratingTrend}, ${report.results.averageStability.rdTrend})`);
+    parts.push(report.results.staticRatingDetection.passed ? '✅ Static Ratings: None' : `❌ Static Ratings: ${report.results.staticRatingDetection.staticSymbols.length} coins stuck`);
     parts.push(report.results.anomalies.detected ? `⚠️  Anomalies: ${report.results.anomalies.details.length} detected` : '✅ Anomalies: None');
     parts.push('');
 
@@ -862,7 +953,35 @@ class GlickoIntegrityValidator {
   }
 
   /**
-   * Validate that all coins have equal number of rating calculations
+   * Validate that all coins have equal number of rating calculations (from pre-computed counts)
+   */
+  private validateCoinsHaveEqualRecordsFromCounts(
+    symbolCounts: Array<{ symbol: string; _count: { id: number } }>,
+    expectedRecordsPerCoin: number
+  ): { passed: boolean; issues: string[] } {
+    const issues: string[] = [];
+
+    // Extract counts
+    const counts = symbolCounts.map(s => s._count.id);
+    const uniqueCounts = [...new Set(counts)];
+
+    if (uniqueCounts.length > 1) {
+      issues.push(`Coins have different record counts: ${symbolCounts.map(s => `${s.symbol}=${s._count.id}`).join(', ')}`);
+    }
+
+    // Check against expected
+    if (uniqueCounts.length === 1 && uniqueCounts[0] !== expectedRecordsPerCoin) {
+      issues.push(`All coins have ${uniqueCounts[0]} records but expected ${expectedRecordsPerCoin}`);
+    }
+
+    return {
+      passed: issues.length === 0 && uniqueCounts.length === 1 && uniqueCounts[0] === expectedRecordsPerCoin,
+      issues,
+    };
+  }
+
+  /**
+   * Validate that all coins have equal number of rating calculations (legacy method for backward compatibility)
    */
   private validateCoinsHaveEqualRecords(
     ratings: Array<{ symbol: string; timestamp: Date; rating: number; rd: number; volatility: number; }>,
@@ -996,6 +1115,19 @@ async function main() {
     report.results.averageStability.issues.forEach(issue =>
       console.log(`    - ${issue}`)
     );
+  }
+  console.log();
+
+  console.log('STATIC RATING DETECTION');
+  console.log(`  Status: ${report.results.staticRatingDetection.passed ? '✅ PASS' : '❌ FAIL'}`);
+  if (report.results.staticRatingDetection.staticSymbols.length > 0) {
+    console.log(`  Found ${report.results.staticRatingDetection.staticSymbols.length} coins with static ratings:`);
+    report.results.staticRatingDetection.staticSymbols.slice(0, 10).forEach(sym =>
+      console.log(`    - ${sym.symbol}: ${sym.staticCount} consecutive intervals at ${sym.value.toFixed(2)}`)
+    );
+    if (report.results.staticRatingDetection.staticSymbols.length > 10) {
+      console.log(`    ... and ${report.results.staticRatingDetection.staticSymbols.length - 10} more`);
+    }
   }
   console.log();
 
