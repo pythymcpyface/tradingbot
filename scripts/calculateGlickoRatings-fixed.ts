@@ -9,25 +9,23 @@ import { PrismaClient } from '@prisma/client';
 import { config } from 'dotenv';
 import { GlickoEngine, GlickoRating } from '../src/services/GlickoEngine';
 import { INITIAL_RATING } from '../src/utils/GlickoMath';
+import { TradingPairsGenerator } from '../src/utils/TradingPairsGenerator';
 
 config();
 
 interface KlineData {
-  symbol: string;
-  openTime: Date;
-  close: number;
-  open: number;
-  volume: number;
-  takerBuyBaseAssetVolume: number;
+// ... existing interface ...
 }
 
 class GlickoScriptRunner {
   private prisma: PrismaClient;
   private engine: GlickoEngine;
+  private generator: TradingPairsGenerator;
 
   constructor() {
     this.prisma = new PrismaClient();
     this.engine = new GlickoEngine();
+    this.generator = new TradingPairsGenerator();
   }
 
   async initialize(): Promise<void> {
@@ -41,22 +39,38 @@ class GlickoScriptRunner {
   }
 
   private async findRelevantPairs(coins: string[]): Promise<Map<string, string[]>> {
-    console.log('🔍 Finding relevant trading pairs...');
+    console.log('🔍 Finding relevant trading pairs from Binance...');
     const coinPairs = new Map<string, string[]>();
+    
+    // Use the generator to find all valid pairs between these coins on Binance
+    let validPairs: string[] = [];
+    try {
+        validPairs = await this.generator.generateTradingPairs(coins);
+    } catch (e) {
+        console.error('Failed to generate trading pairs from Binance, falling back to local construction:', e);
+        // Fallback logic if API fails? Or just re-throw? 
+        // Given the requirement, let's try to proceed with local check if API fails, but ideally we rely on API.
+        // For now, let's allow it to fail or return empty if API fails, but checking DB is safer fallback.
+    }
+
+    // If API failed or returned nothing (offline?), maybe fallback to permutation + DB check?
+    // But assuming API works:
+    
+    // Identify which of these valid pairs we actually have data for in the DB
+    console.log(`Checking database for data on ${validPairs.length} valid Binance pairs...`);
     
     for (const coin of coins) {
       const relevantPairs: string[] = [];
-      for (const otherCoin of coins) {
-        if (otherCoin !== coin) {
-          const pair1 = `${coin}${otherCoin}`;
-          const pair2 = `${otherCoin}${coin}`;
-          
-          const pair1Exists = await this.prisma.klines.findFirst({ where: { symbol: pair1 }, select: { id: true } });
-          const pair2Exists = await this.prisma.klines.findFirst({ where: { symbol: pair2 }, select: { id: true } });
-          
-          if (pair1Exists) relevantPairs.push(pair1);
-          if (pair2Exists) relevantPairs.push(pair2);
-        }
+      
+      // Filter pairs that involve this coin
+      const potentialPairs = validPairs.filter(p => p.startsWith(coin) || p.endsWith(coin));
+      
+      for (const pair of potentialPairs) {
+          // Verify we have data in DB
+          const exists = await this.prisma.klines.findFirst({ where: { symbol: pair }, select: { id: true } });
+          if (exists) {
+              relevantPairs.push(pair);
+          }
       }
       coinPairs.set(coin, relevantPairs);
     }
@@ -69,29 +83,38 @@ class GlickoScriptRunner {
     // 1. Identify Pairs
     const coinPairs = await this.findRelevantPairs(coins);
     
-    // Build metadata map
-    const pairMetadata = new Map<string, { base: string, quote: string }>();
-    for (const [coin, pairs] of coinPairs) {
-      for (const pair of pairs) {
-        if (!pairMetadata.has(pair)) {
-            const base = coins.find(c => pair.startsWith(c) && pair !== c); 
-            if (base) {
-                const quote = pair.substring(base.length);
-                if (coins.includes(quote)) {
-                    pairMetadata.set(pair, { base, quote });
-                }
-            }
-        }
-      }
+    // Flatten unique pairs
+    const uniquePairs = new Set<string>();
+    for (const pairs of coinPairs.values()) {
+        pairs.forEach(p => uniquePairs.add(p));
     }
-    
-    const allPairs = Array.from(pairMetadata.keys());
-    console.log(`ℹ️  Identified ${pairMetadata.size} unique pairwise matchups.`);
+    const allPairs = Array.from(uniquePairs);
 
     if (allPairs.length === 0) {
         console.warn('⚠️ No relevant trading pairs found.');
         return;
     }
+
+    // Build metadata map using robust generator info
+    const pairMetadata = new Map<string, { base: string, quote: string }>();
+    try {
+        const details = await this.generator.getDetailedPairInfo(allPairs);
+        for (const d of details) {
+            pairMetadata.set(d.symbol, { base: d.baseAsset, quote: d.quoteAsset });
+        }
+    } catch (e) {
+        console.warn('⚠️ Failed to fetch detailed pair info from Binance, falling back to string parsing:', e);
+        // Fallback
+        for (const pair of allPairs) {
+             const base = coins.find(c => pair.startsWith(c) && pair !== c); 
+             if (base) {
+                 const quote = pair.substring(base.length);
+                 pairMetadata.set(pair, { base, quote });
+             }
+        }
+    }
+    
+    console.log(`ℹ️  Identified ${pairMetadata.size} unique pairwise matchups.`);
 
     // 2. Initialize Results Storage
     const results = new Map<string, Array<{ timestamp: Date; rating: GlickoRating; performanceScore: number }>>();

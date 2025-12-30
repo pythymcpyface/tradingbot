@@ -19,6 +19,7 @@ import { config } from 'dotenv';
 import { GlickoEngine } from '../src/services/GlickoEngine';
 import { SignalGeneratorService, RatingInput } from '../src/services/SignalGeneratorService';
 import { TradingParameterSet } from '../src/types';
+import { TradingPairsGenerator } from '../src/utils/TradingPairsGenerator';
 
 config();
 
@@ -33,9 +34,11 @@ interface IntegrationTestResult {
 class IntegrationTester {
   private prisma: PrismaClient;
   private results: IntegrationTestResult[] = [];
+  private generator: TradingPairsGenerator;
 
   constructor() {
     this.prisma = new PrismaClient();
+    this.generator = new TradingPairsGenerator();
   }
 
   async initialize(): Promise<void> {
@@ -46,6 +49,24 @@ class IntegrationTester {
   async cleanup(): Promise<void> {
     await this.prisma.$disconnect();
     console.log('Database connection closed');
+  }
+
+  private async getTestPairs(baseCoins: string[]): Promise<string[]> {
+      try {
+          // Try dynamic discovery first
+          return await this.generator.generateTradingPairs(baseCoins);
+      } catch (e) {
+          console.warn('  ⚠️ Offline/API Error: Falling back to manual pair construction');
+          const tradingPairs: string[] = [];
+          for (const base of baseCoins) {
+            for (const quote of baseCoins) {
+                if (base !== quote) {
+                    tradingPairs.push(`${base}${quote}`);
+                }
+            }
+          }
+          return tradingPairs;
+      }
   }
 
   /**
@@ -65,14 +86,7 @@ class IntegrationTester {
       console.log(`  Testing with ${baseCoins.length} coins: ${baseCoins.join(', ')}`);
 
       // Generate trading pairs
-      const tradingPairs: string[] = [];
-      for (const base of baseCoins) {
-        for (const quote of baseCoins) {
-          if (base !== quote) {
-            tradingPairs.push(`${base}${quote}`);
-          }
-        }
-      }
+      const tradingPairs = await this.getTestPairs(baseCoins);
 
       console.log(`  Generated ${tradingPairs.length} trading pairs`);
 
@@ -225,14 +239,8 @@ class IntegrationTester {
       console.log(`  Testing with ${baseCoins.length} coins: ${baseCoins.join(', ')}`);
 
       // Generate trading pairs
-      const tradingPairs: string[] = [];
-      for (const base of baseCoins) {
-        for (const quote of baseCoins) {
-          if (base !== quote) {
-            tradingPairs.push(`${base}${quote}`);
-          }
-        }
-      }
+      // Generate trading pairs
+      const tradingPairs = await this.getTestPairs(baseCoins);
 
       // Fetch last 48 hours of klines (using actual data end date)
       const endTime = new Date('2025-12-08T00:00:00.000Z');
@@ -408,14 +416,8 @@ class IntegrationTester {
       console.log(`  Testing ${baseCoins.length} coins over 7-day period...`);
 
       // Generate trading pairs
-      const tradingPairs: string[] = [];
-      for (const base of baseCoins) {
-        for (const quote of baseCoins) {
-          if (base !== quote) {
-            tradingPairs.push(`${base}${quote}`);
-          }
-        }
-      }
+      // Generate trading pairs
+      const tradingPairs = await this.getTestPairs(baseCoins);
 
       // Fetch last 7 days of klines (using actual data end date)
       const endTime = new Date('2025-12-08T00:00:00.000Z');
@@ -547,14 +549,8 @@ class IntegrationTester {
         .filter(coin => coin !== 'USDT')
         .slice(0, 6);
 
-      const tradingPairs: string[] = [];
-      for (const base of baseCoins) {
-        for (const quote of baseCoins) {
-          if (base !== quote) {
-            tradingPairs.push(`${base}${quote}`);
-          }
-        }
-      }
+      // Generate trading pairs
+      const tradingPairs = await this.getTestPairs(baseCoins);
 
       // Fetch 1000 klines for benchmark (using actual data end date)
       const endTime = new Date('2025-12-08T00:00:00.000Z');

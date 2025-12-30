@@ -7,6 +7,7 @@ import { AllocationManager } from '../../services/AllocationManager';
 import { SignalGeneratorService, RatingInput } from '../../services/SignalGeneratorService';
 import { OCOOrderService } from '../../services/OCOOrderService';
 import { GlickoEngine } from '../../services/GlickoEngine';
+import { TradingPairsGenerator } from '../../utils/TradingPairsGenerator';
 
 export interface TradingConfig {
   zScoreThreshold: number;
@@ -824,20 +825,32 @@ export class TradingEngine extends EventEmitter {
   private async calculatePairwiseRatings(baseCoins: string[], periodsToFetch: number): Promise<Map<string, { rating: number; ratingDeviation: number; volatility: number }>> {
     const engine = new GlickoEngine();
     const now = new Date();
+    const generator = new TradingPairsGenerator();
 
     // Initialize all coins in the engine
     for (const coin of baseCoins) {
       engine.ensureCoinExists(coin, now);
     }
 
-    // 1. Find relevant trading pairs
+    // 1. Find relevant trading pairs using dynamic discovery
     const tradingPairs: Array<{ pair: string; base: string; quote: string }> = [];
-    for (const base of baseCoins) {
-      for (const quote of baseCoins) {
-        if (base !== quote) {
-          tradingPairs.push({ pair: `${base}${quote}`, base, quote });
+    try {
+        console.log('🔍 Discovering valid trading pairs via Binance API...');
+        const validPairs = await generator.generateTradingPairs(baseCoins);
+        const details = await generator.getDetailedPairInfo(validPairs);
+        details.forEach(d => {
+            tradingPairs.push({ pair: d.symbol, base: d.baseAsset, quote: d.quoteAsset });
+        });
+    } catch (e) {
+        console.warn('⚠️ Dynamic pair discovery failed, falling back to basic construction:', e);
+        // Fallback to manual permutation if API fails
+        for (const base of baseCoins) {
+          for (const quote of baseCoins) {
+            if (base !== quote) {
+              tradingPairs.push({ pair: `${base}${quote}`, base, quote });
+            }
+          }
         }
-      }
     }
 
     console.log(`🔍 Processing ${tradingPairs.length} potential trading pairs for pairwise Glicko calculation...`);

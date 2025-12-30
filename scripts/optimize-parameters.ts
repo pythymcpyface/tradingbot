@@ -488,12 +488,16 @@ class ParameterOptimizer {
     console.log('================================================================================');
   }
 
+import { TradingPairsGenerator } from '../src/utils/TradingPairsGenerator';
+
+// ... (existing code)
+
   async run() {
     await this.initialize();
 
     let pairs: { base: string, quote: string }[] = [];
 
-    // Prioritize TRADING_PAIRS if available
+    // Option 1: Prioritize TRADING_PAIRS from env (Fastest, Offline-friendly)
     if (process.env.TRADING_PAIRS) {
       const rawPairs = process.env.TRADING_PAIRS.split(',').map(s => s.trim()).filter(s => s.length > 0);
       const knownQuotes = ['USDT', 'USDC', 'BUSD', 'DAI', 'FDUSD', 'BTC', 'ETH', 'BNB'];
@@ -506,16 +510,35 @@ class ParameterOptimizer {
         }
         return null; 
       }).filter((p): p is { base: string, quote: string } => p !== null && p.base.length > 0);
-      this.dashboard.log(`Loaded ${pairs.length} pairs from TRADING_PAIRS`);
+
+      this.dashboard.log(`Loaded ${pairs.length} pairs from TRADING_PAIRS env`);
     } 
     
-    // Fallback to BASE_COINS + USDT
+    // Option 2: Dynamic discovery using TradingPairsGenerator (Comprehensive)
     if (pairs.length === 0) {
       const baseCoinsStr = process.env.BASE_COINS || '';
       const baseCoins = baseCoinsStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      const quoteAsset = 'USDT';
-      pairs = baseCoins.map(base => ({ base, quote: quoteAsset }));
-      this.dashboard.log(`Loaded ${pairs.length} pairs from BASE_COINS`);
+      
+      if (baseCoins.length > 0) {
+        this.dashboard.log(`Discovering pairs for ${baseCoins.length} base coins...`);
+        const generator = new TradingPairsGenerator();
+        try {
+          const validPairStrings = await generator.generateTradingPairs(baseCoins);
+          const details = await generator.getDetailedPairInfo(validPairStrings);
+          
+          pairs = details.map(d => ({
+            base: d.baseAsset,
+            quote: d.quoteAsset
+          }));
+          this.dashboard.log(`Discovered ${pairs.length} valid pairs from Binance`);
+        } catch (error) {
+           this.dashboard.log(`Error discovering pairs: ${error instanceof Error ? error.message : String(error)}`);
+           // Fallback to basic construction if API fails
+           const quoteAsset = 'USDT';
+           pairs = baseCoins.map(base => ({ base, quote: quoteAsset }));
+           this.dashboard.log(`Fallback: Constructed ${pairs.length} pairs (assuming USDT quote)`);
+        }
+      }
     }
 
     const totalTasks = pairs.length * (INITIAL_SAMPLES + REFINEMENT_SAMPLES);
