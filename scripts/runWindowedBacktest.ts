@@ -207,7 +207,18 @@ class WindowedBacktester {
     let cash = this.INITIAL_CAPITAL;
     const equityCurve: Array<{ timestamp: Date; value: number }> = [];
 
+    const totalSteps = zScores.length;
+    let processedSteps = 0;
+    let lastProgress = 0;
+
     for (const zScore of zScores) {
+      processedSteps++;
+      const progress = Math.floor((processedSteps / totalSteps) * 100);
+      if (progress > lastProgress && progress % 5 === 0) {
+        console.log(`PROGRESS: ${progress}`);
+        lastProgress = progress;
+      }
+
       if (zScore.timestamp < config.startTime) continue;
       if (zScore.timestamp > config.endTime) break;
 
