@@ -266,8 +266,8 @@ class ParameterOptimizer {
     params: ParameterSet
   ): Promise<OptimizationResult | null> {
     return new Promise((resolve) => {
-      const now = new Date();
-      const windowMonths = Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+      // Use 12-month window for walk-forward analysis
+      const windowMonths = 12;
 
       const paramStr = `Z=${params.zScore} MA=${params.ma} P=${params.profit} S=${params.stop}`;
       this.dashboard.updateWorker(workerId, {
@@ -279,7 +279,7 @@ class ParameterOptimizer {
       });
 
       const args = [
-        'scripts/runWindowedBacktest.ts',
+        'scripts/runAllWindowedBacktests.ts',
         start.toISOString().split('T')[0],
         windowMonths.toString(),
         baseAsset,
@@ -287,13 +287,12 @@ class ParameterOptimizer {
         params.zScore.toString(),
         params.ma.toString(),
         params.profit.toString(),
-        params.stop.toString(),
-        '--no-html'
+        params.stop.toString()
       ];
 
       const child = spawn('npx', ['ts-node', ...args], {
         stdio: 'pipe',
-        timeout: BACKTEST_TIMEOUT
+        timeout: BACKTEST_TIMEOUT * 3 // Increase timeout for multiple windows
       });
 
       let stdout = '';
@@ -302,29 +301,51 @@ class ParameterOptimizer {
         const str = data.toString();
         stdout += str;
         
-        // Parse Progress
-        const progressMatch = str.match(/PROGRESS: (\d+)/);
-        if (progressMatch) {
-          this.dashboard.updateWorker(workerId, { progress: parseInt(progressMatch[1]) });
+        // Parse Walk-Forward Progress (Window X of Y isn't easily available, just check for "Running backtest")
+        // We can count occurrences of "Running backtest"
+        const matches = str.match(/Running backtest/g);
+        if (matches) {
+           // Rough progress estimation could be added here if we knew total windows
+           this.dashboard.updateWorker(workerId, { progress: Math.min(99, matches.length * 10) });
         }
       });
       
       child.on('close', (code) => {
         if (code === 0) {
           try {
-            const returnMatch = stdout.match(/Total Return: (-?\d+\.?\d*)%/);
-            const sharpeMatch = stdout.match(/Sharpe Ratio: (-?\d+\.?\d*)/);
-            const tradesMatch = stdout.match(/Total Trades: (\d+)/);
+            // Parse Walk-Forward Summary
+            // "Average return per window: 12.34%"
+            // "Average Sharpe Ratio" is not explicitly printed in the summary logs of runAllWindowedBacktests.ts based on my reading,
+            // let's double check the read file output.
+            // It prints:
+            // - Average return per window: 12.34%
+            // - Positive windows: 5/10 (50.0%)
+            // - Best window: ...
+            // - Worst window: ...
+            
+            // It does NOT print Average Sharpe in the summary console log.
+            // It calculates it in `generateAnalysisReport` but only logs returns stats.
+            
+            // I need to update runAllWindowedBacktests.ts to log Average Sharpe or calculate it here.
+            // OR I can parse the individual window lines: "Sharpe: 2.12"
+            
+            const sharpeMatches = [...stdout.matchAll(/Sharpe: (-?\d+\.?\d*)/g)];
+            const totalSharpe = sharpeMatches.reduce((sum, match) => sum + parseFloat(match[1]), 0);
+            const avgSharpe = sharpeMatches.length > 0 ? totalSharpe / sharpeMatches.length : 0;
+            
+            const returnMatch = stdout.match(/Average return per window: (-?\d+\.?\d*)%/);
+            const tradesMatches = [...stdout.matchAll(/Trades: (\d+)/g)];
+            const totalTrades = tradesMatches.reduce((sum, match) => sum + parseInt(match[1]), 0);
 
-            if (returnMatch && sharpeMatch) {
+            if (returnMatch) {
               resolve({
                 params,
                 metrics: {
-                  totalReturn: parseFloat(returnMatch[1]),
-                  sharpeRatio: parseFloat(sharpeMatch[1]),
-                  trades: tradesMatch ? parseInt(tradesMatch[1]) : 0
+                  totalReturn: parseFloat(returnMatch[1]), // Using Avg Return as proxy for Total Return metric
+                  sharpeRatio: avgSharpe,
+                  trades: totalTrades
                 },
-                runId: 'unknown'
+                runId: 'walk-forward'
               });
               return;
             }
@@ -337,7 +358,7 @@ class ParameterOptimizer {
       
       setTimeout(() => {
         if (!child.killed) child.kill();
-      }, BACKTEST_TIMEOUT);
+      }, BACKTEST_TIMEOUT * 3);
     });
   }
 
@@ -416,20 +437,45 @@ class ParameterOptimizer {
   async run() {
     await this.initialize();
 
-    const baseCoinsStr = process.env.BASE_COINS || '';
-    const baseCoins = baseCoinsStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
-    const quoteAsset = 'USDT';
+    let pairs: { base: string, quote: string }[] = [];
 
-    const totalTasks = baseCoins.length * (INITIAL_SAMPLES + REFINEMENT_SAMPLES);
+    // Prioritize TRADING_PAIRS if available
+    if (process.env.TRADING_PAIRS) {
+      const rawPairs = process.env.TRADING_PAIRS.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      const knownQuotes = ['USDT', 'USDC', 'BUSD', 'DAI', 'FDUSD', 'BTC', 'ETH', 'BNB'];
+      
+      pairs = rawPairs.map(raw => {
+        // Try to match quote at end of string (longest matches first)
+        const quote = knownQuotes.find(q => raw.endsWith(q));
+        if (quote) {
+          const base = raw.slice(0, -quote.length);
+          return { base, quote };
+        }
+        return null; 
+      }).filter((p): p is { base: string, quote: string } => p !== null && p.base.length > 0);
+
+      this.dashboard.log(`Loaded ${pairs.length} pairs from TRADING_PAIRS env`);
+    } 
+    
+    // Fallback to BASE_COINS + USDT
+    if (pairs.length === 0) {
+      const baseCoinsStr = process.env.BASE_COINS || '';
+      const baseCoins = baseCoinsStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      const quoteAsset = 'USDT';
+      pairs = baseCoins.map(base => ({ base, quote: quoteAsset }));
+      this.dashboard.log(`Loaded ${pairs.length} pairs from BASE_COINS env`);
+    }
+
+    const totalTasks = pairs.length * (INITIAL_SAMPLES + REFINEMENT_SAMPLES);
     this.dashboard.setTotalTasks(totalTasks);
-    this.dashboard.log(`Starting Optimization for ${baseCoins.length} pairs. Total Runs: ${totalTasks}`);
+    this.dashboard.log(`Starting Optimization for ${pairs.length} pairs. Total Runs: ${totalTasks}`);
 
     // Since our pool is global, we can just fire them all off.
     // However, Node might choke on hundreds of Promises. Let's limit active PAIRS too?
     // Actually, the `getWorkerSlot` semaphore limits the *execution*.
     // Creating 1000 promises that wait for a slot is fine in Node.
     
-    const pairPromises = baseCoins.map(coin => this.optimizePair(coin, quoteAsset));
+    const pairPromises = pairs.map(p => this.optimizePair(p.base, p.quote));
     await Promise.all(pairPromises);
 
     this.dashboard.log('Optimization Complete');
