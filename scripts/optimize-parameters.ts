@@ -5,6 +5,14 @@
  * 
  * This script performs a parallelized, iterative optimization of trading parameters
  * using an Estimation of Distribution Algorithm (EDA) approach.
+ * 
+ * Workflow:
+ * 1. Discovery: Identifies target pairs from .env and available data range from DB.
+ * 2. Phase 1 (Exploration): "Casts a wide net" by randomly sampling parameters from wide ranges.
+ * 3. Evaluation: Runs backtests in parallel child processes (using Walk-Forward Analysis).
+ * 4. Analysis: Identifies top performers based on ALPHA (Excess Return).
+ * 5. Phase 2 (Refinement): Samples new parameters from a distribution centered on best performers.
+ * 6. Result: Saves all runs to database and outputs optimal parameters.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -20,10 +28,10 @@ config();
 const CONCURRENCY_LIMIT = parseInt(process.env.OPTIMIZE_CONCURRENCY || '5'); 
 const INITIAL_SAMPLES = parseInt(process.env.OPTIMIZE_PHASE1_SAMPLES || '20');
 const REFINEMENT_SAMPLES = parseInt(process.env.OPTIMIZE_PHASE2_SAMPLES || '10');
-const BACKTEST_TIMEOUT = 60000; // 60s hard timeout (increased slightly)
+const BACKTEST_TIMEOUT = 120000; // 2 minutes hard timeout for walk-forward
 const MIN_DATAPOINTS = 100;
 
-// Ranges (Updated Defaults)
+// Ranges
 const RANGES = {
   zScore: { 
     min: parseFloat(process.env.OPTIMIZE_ZSCORE_MIN || '1.5'), 
@@ -59,6 +67,7 @@ interface OptimizationResult {
   metrics: {
     totalReturn: number;
     sharpeRatio: number;
+    alpha: number;
     trades: number;
   };
   runId: string;
@@ -155,7 +164,7 @@ class Dashboard {
       globalEta = avgTimePerTask * remainingTasks;
     }
 
-    console.log(`🚀 OPTIMIZATION DASHBOARD`);
+    console.log(`🚀 OPTIMIZATION DASHBOARD (Strategy: Maximize Alpha)`);
     console.log(`================================================================================`);
     console.log(`Global Progress: ${globalProgress.toFixed(1)}% ${this.generateProgressBar(globalProgress, 40)}`);
     console.log(`Tasks: ${this.completedTasks}/${this.totalTasks} | Elapsed: ${this.formatTime(elapsed)} | ETA: ${this.formatTime(globalEta)}`);
@@ -278,6 +287,7 @@ class ParameterOptimizer {
         startTime: Date.now()
       });
 
+      // Pass --no-html to suppress charts/logs
       const args = [
         'scripts/runAllWindowedBacktests.ts',
         start.toISOString().split('T')[0],
@@ -287,12 +297,13 @@ class ParameterOptimizer {
         params.zScore.toString(),
         params.ma.toString(),
         params.profit.toString(),
-        params.stop.toString()
+        params.stop.toString(),
+        '--no-html'
       ];
 
       const child = spawn('npx', ['ts-node', ...args], {
         stdio: 'pipe',
-        timeout: BACKTEST_TIMEOUT * 3 // Increase timeout for multiple windows
+        timeout: BACKTEST_TIMEOUT
       });
 
       let stdout = '';
@@ -301,11 +312,9 @@ class ParameterOptimizer {
         const str = data.toString();
         stdout += str;
         
-        // Parse Walk-Forward Progress (Window X of Y isn't easily available, just check for "Running backtest")
-        // We can count occurrences of "Running backtest"
+        // Count "Running backtest" occurrences for progress estimation
         const matches = str.match(/Running backtest/g);
         if (matches) {
-           // Rough progress estimation could be added here if we knew total windows
            this.dashboard.updateWorker(workerId, { progress: Math.min(99, matches.length * 10) });
         }
       });
@@ -313,36 +322,37 @@ class ParameterOptimizer {
       child.on('close', (code) => {
         if (code === 0) {
           try {
-            // Parse Walk-Forward Summary
-            // "Average return per window: 12.34%"
-            // "Average Sharpe Ratio" is not explicitly printed in the summary logs of runAllWindowedBacktests.ts based on my reading,
-            // let's double check the read file output.
-            // It prints:
-            // - Average return per window: 12.34%
-            // - Positive windows: 5/10 (50.0%)
-            // - Best window: ...
-            // - Worst window: ...
+            // Parse Walk-Forward Metrics
             
-            // It does NOT print Average Sharpe in the summary console log.
-            // It calculates it in `generateAnalysisReport` but only logs returns stats.
-            
-            // I need to update runAllWindowedBacktests.ts to log Average Sharpe or calculate it here.
-            // OR I can parse the individual window lines: "Sharpe: 2.12"
-            
-            const sharpeMatches = [...stdout.matchAll(/Sharpe: (-?\d+\.?\d*)/g)];
+            // 1. Sharpe (Parse all occurrences and average them, or wait for summary support in runAllWindowed)
+            // Currently runAllWindowed prints "Sharpe Ratio: X.XX" for each window.
+            const sharpeMatches = [...stdout.matchAll(/Sharpe Ratio: (-?\d+\.?\d*)/g)];
             const totalSharpe = sharpeMatches.reduce((sum, match) => sum + parseFloat(match[1]), 0);
             const avgSharpe = sharpeMatches.length > 0 ? totalSharpe / sharpeMatches.length : 0;
             
-            const returnMatch = stdout.match(/Average return per window: (-?\d+\.?\d*)%/);
+            // 2. Alpha (Excess Return)
+            // Currently runAllWindowed prints "Alpha: X.XX%" for each window.
+            const alphaMatches = [...stdout.matchAll(/Alpha: (-?\d+\.?\d*)%/g)];
+            const totalAlpha = alphaMatches.reduce((sum, match) => sum + parseFloat(match[1]), 0);
+            const avgAlpha = alphaMatches.length > 0 ? totalAlpha / alphaMatches.length : 0;
+            
+            // 3. Return & Trades (from summary or individual)
+            // Using individual sum for trades
             const tradesMatches = [...stdout.matchAll(/Trades: (\d+)/g)];
             const totalTrades = tradesMatches.reduce((sum, match) => sum + parseInt(match[1]), 0);
 
-            if (returnMatch) {
+            // 4. Total Return (Average Return per Window)
+            // runAllWindowedBacktests logs "Average Return per Window" at end.
+            const avgReturnMatch = stdout.match(/Average Return per Window.*: (-?\d+\.?\d*)%/);
+            const avgReturn = avgReturnMatch ? parseFloat(avgReturnMatch[1]) : 0;
+
+            if (sharpeMatches.length > 0) {
               resolve({
                 params,
                 metrics: {
-                  totalReturn: parseFloat(returnMatch[1]), // Using Avg Return as proxy for Total Return metric
+                  totalReturn: avgReturn,
                   sharpeRatio: avgSharpe,
+                  alpha: avgAlpha,
                   trades: totalTrades
                 },
                 runId: 'walk-forward'
@@ -358,7 +368,7 @@ class ParameterOptimizer {
       
       setTimeout(() => {
         if (!child.killed) child.kill();
-      }, BACKTEST_TIMEOUT * 3);
+      }, BACKTEST_TIMEOUT);
     });
   }
 
@@ -394,13 +404,13 @@ class ParameterOptimizer {
     const phase1Results = (await Promise.all(phase1Promises)).filter((r): r is OptimizationResult => r !== null);
     if (phase1Results.length === 0) return;
 
-    // Analyze Phase 1
-    const sorted = phase1Results.sort((a, b) => b.metrics.sharpeRatio - a.metrics.sharpeRatio);
+    // Analyze Phase 1 (Sort by Alpha)
+    const sorted = phase1Results.sort((a, b) => b.metrics.alpha - a.metrics.alpha);
     const topPerformers = sorted.slice(0, Math.max(3, Math.floor(phase1Results.length * 0.2)));
     const best = topPerformers[0];
-    this.dashboard.log(`Phase 1 Best (${baseAsset}): Sharpe=${best.metrics.sharpeRatio.toFixed(2)}`);
+    this.dashboard.log(`Phase 1 Best (${baseAsset}): Alpha=${best.metrics.alpha.toFixed(2)}%`);
 
-    // Phase 2
+    // Phase 2 (Refine around best Alpha performers)
     const zStats = { mean: calculateMean(topPerformers.map(r => r.params.zScore)), std: calculateStdDev(topPerformers.map(r => r.params.zScore)) || 0.5 };
     const maStats = { mean: calculateMean(topPerformers.map(r => r.params.ma)), std: calculateStdDev(topPerformers.map(r => r.params.ma)) || 5 };
     const profitStats = { mean: calculateMean(topPerformers.map(r => r.params.profit)), std: calculateStdDev(topPerformers.map(r => r.params.profit)) || 1.0 };
@@ -430,8 +440,52 @@ class ParameterOptimizer {
     const phase2Results = (await Promise.all(phase2Promises)).filter((r): r is OptimizationResult => r !== null);
     
     // Final Log
-    const all = [...phase1Results, ...phase2Results].sort((a, b) => b.metrics.sharpeRatio - a.metrics.sharpeRatio);
-    this.dashboard.log(`Optimized ${baseAsset}: Best Sharpe=${all[0].metrics.sharpeRatio.toFixed(3)}`);
+    const all = [...phase1Results, ...phase2Results].sort((a, b) => b.metrics.alpha - a.metrics.alpha);
+    const finalBest = all[0];
+    this.dashboard.log(`Optimized ${baseAsset}: Best Alpha=${finalBest.metrics.alpha.toFixed(2)}% (Z=${finalBest.params.zScore}, MA=${finalBest.params.ma}, P=${finalBest.params.profit}, S=${finalBest.params.stop})`);
+    
+    // Explicitly save the best result to the database as "OPTIMAL" if needed, 
+    // but runAllWindowedBacktests already saved the runs. 
+    // We just need to report them.
+  }
+
+  async reportTopSets() {
+    console.log('\n🏆 TOP PERFORMING PARAMETER SETS (By Alpha)');
+    console.log('================================================================================');
+    
+    // Query OptimizationResults table
+    const results = await this.prisma.optimizationResults.findMany({
+      orderBy: { alpha: 'desc' },
+      take: 20,
+      select: {
+        baseAsset: true,
+        quoteAsset: true,
+        zScoreThreshold: true,
+        movingAverages: true,
+        profitPercent: true,
+        stopLossPercent: true,
+        alpha: true,
+        sharpeRatio: true,
+        totalReturn: true,
+        totalTrades: true
+      }
+    });
+
+    console.log(`${'PAIR'.padEnd(10)} | ${'ALPHA'.padEnd(10)} | ${'SHARPE'.padEnd(8)} | ${'RETURN'.padEnd(10)} | ${'TRADES'.padEnd(8)} | ${'PARAMS (Z/MA/P/S)'.padEnd(30)}`);
+    console.log('-'.repeat(90));
+
+    for (const r of results) {
+        const params = `${Number(r.zScoreThreshold)} / ${r.movingAverages} / ${Number(r.profitPercent)}% / ${Number(r.stopLossPercent)}%`;
+        console.log(
+            `${r.baseAsset}/${r.quoteAsset}`.padEnd(10) + ' | ' +
+            `${Number(r.alpha).toFixed(2)}%`.padEnd(10) + ' | ' +
+            `${Number(r.sharpeRatio).toFixed(2)}`.padEnd(8) + ' | ' +
+            `${Number(r.totalReturn).toFixed(2)}%`.padEnd(10) + ' | ' +
+            `${r.totalTrades}`.padEnd(8) + ' | ' +
+            params
+        );
+    }
+    console.log('================================================================================');
   }
 
   async run() {
@@ -445,7 +499,6 @@ class ParameterOptimizer {
       const knownQuotes = ['USDT', 'USDC', 'BUSD', 'DAI', 'FDUSD', 'BTC', 'ETH', 'BNB'];
       
       pairs = rawPairs.map(raw => {
-        // Try to match quote at end of string (longest matches first)
         const quote = knownQuotes.find(q => raw.endsWith(q));
         if (quote) {
           const base = raw.slice(0, -quote.length);
@@ -453,8 +506,7 @@ class ParameterOptimizer {
         }
         return null; 
       }).filter((p): p is { base: string, quote: string } => p !== null && p.base.length > 0);
-
-      this.dashboard.log(`Loaded ${pairs.length} pairs from TRADING_PAIRS env`);
+      this.dashboard.log(`Loaded ${pairs.length} pairs from TRADING_PAIRS`);
     } 
     
     // Fallback to BASE_COINS + USDT
@@ -463,25 +515,26 @@ class ParameterOptimizer {
       const baseCoins = baseCoinsStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
       const quoteAsset = 'USDT';
       pairs = baseCoins.map(base => ({ base, quote: quoteAsset }));
-      this.dashboard.log(`Loaded ${pairs.length} pairs from BASE_COINS env`);
+      this.dashboard.log(`Loaded ${pairs.length} pairs from BASE_COINS`);
     }
 
     const totalTasks = pairs.length * (INITIAL_SAMPLES + REFINEMENT_SAMPLES);
     this.dashboard.setTotalTasks(totalTasks);
-    this.dashboard.log(`Starting Optimization for ${pairs.length} pairs. Total Runs: ${totalTasks}`);
-
-    // Since our pool is global, we can just fire them all off.
-    // However, Node might choke on hundreds of Promises. Let's limit active PAIRS too?
-    // Actually, the `getWorkerSlot` semaphore limits the *execution*.
-    // Creating 1000 promises that wait for a slot is fine in Node.
+    this.dashboard.log(`Starting Optimization (Max Alpha). Total Runs: ${totalTasks}`);
     
     const pairPromises = pairs.map(p => this.optimizePair(p.base, p.quote));
     await Promise.all(pairPromises);
 
     this.dashboard.log('Optimization Complete');
+    
+    // Render final report
+    readline.cursorTo(process.stdout, 0, 0);
+    readline.clearScreenDown(process.stdout);
+    await this.reportTopSets();
+
     await this.prisma.$disconnect();
-    // Keep process alive briefly to show final state
-    await new Promise(r => setTimeout(r, 2000));
+    // Keep process alive briefly
+    await new Promise(r => setTimeout(r, 1000));
   }
 }
 
