@@ -1,37 +1,39 @@
 {
-    "parameterSets": [
-        {
-            "symbol": "BTCUSDT",
-            "baseAsset": "BTC",
-            "quoteAsset": "USDT",
-            "zScoreThreshold": 5.0,
-            "movingAverages": 10,
-            "profitPercent": 15.0,
-            "stopLossPercent": 2,
-            "allocationPercent": 33.3,
-            "enabled": true
-        },
-        {
-            "symbol": "BNBUSDT",
-            "baseAsset": "BNB",
-            "quoteAsset": "USDT",
-            "zScoreThreshold": 7.0,
-            "movingAverages": 10,
-            "profitPercent": 20.0,
-            "stopLossPercent": 30,
-            "allocationPercent": 33.3,
-            "enabled": true
-        },
-        {
-            "symbol": "ETHUSDT",
-            "baseAsset": "ETH",
-            "quoteAsset": "USDT",
-            "zScoreThreshold": 6.0,
-            "movingAverages": 10,
-            "profitPercent": 22.0,
-            "stopLossPercent": 6,
-            "allocationPercent": 33.3,
-            "enabled": true
-        }
-    ]
+  "description": "Generated from robust-params.json for Live Trading",
+  "updatedAt": "2026-01-01T22:47:21.164Z",
+  "parameterSets": [
+    {
+      "symbol": "LINK/ETH",
+      "baseAsset": "LINK",
+      "quoteAsset": "ETH",
+      "zScoreThreshold": 3,
+      "movingAverages": 20,
+      "profitPercent": 13,
+      "stopLossPercent": 2,
+      "allocationPercent": 33.3,
+      "enabled": true
+    },
+    {
+      "symbol": "AVAX/USDT",
+      "baseAsset": "AVAX",
+      "quoteAsset": "USDT",
+      "zScoreThreshold": 3,
+      "movingAverages": 20,
+      "profitPercent": 13,
+      "stopLossPercent": 2,
+      "allocationPercent": 33.3,
+      "enabled": true
+    },
+    {
+      "symbol": "ETH/USDT",
+      "baseAsset": "ETH",
+      "quoteAsset": "USDT",
+      "zScoreThreshold": 4,
+      "movingAverages": 20,
+      "profitPercent": 13,
+      "stopLossPercent": 2,
+      "allocationPercent": 33.3,
+      "enabled": true
+    }
+  ]
 }

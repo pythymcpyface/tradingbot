@@ -1,0 +1,29 @@
+{
+  "LINK/ETH": {
+    "zScoreThreshold": 3,
+    "movingAverages": 20,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 15.7,
+    "expectedReturn": 25.7,
+    "stability": 0.97
+  },
+  "AVAX/USDT": {
+    "zScoreThreshold": 3,
+    "movingAverages": 20,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 15.6,
+    "expectedReturn": 43.9,
+    "stability": 0.92
+  },
+  "ETH/USDT": {
+    "zScoreThreshold": 4,
+    "movingAverages": 20,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 11.8,
+    "expectedReturn": 39.2,
+    "stability": 0.86
+  }
+}

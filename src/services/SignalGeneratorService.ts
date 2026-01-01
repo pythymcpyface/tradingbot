@@ -129,8 +129,20 @@ export class SignalGeneratorService {
       historyLength: number;
     }>();
 
-    for (const rating of ratings) {
-      const tradingSymbol = `${rating.symbol}USDT`;
+    // Iterate over configured trading pairs (parameter sets)
+    for (const params of parameterSets.values()) {
+      if (!params.enabled) continue;
+
+      const tradingSymbol = params.symbol;
+      const baseAsset = params.baseAsset;
+
+      // Find the rating for the base asset
+      const rating = ratings.find(r => r.symbol === baseAsset);
+      
+      if (!rating) {
+        // Warning: No rating found for this base asset
+        continue;
+      }
 
       const currentZScore = this.calculateZScore(
         rating.rating,
@@ -144,11 +156,6 @@ export class SignalGeneratorService {
         rating.rating,
         rating.timestamp
       );
-
-      const params = parameterSets.get(tradingSymbol);
-      if (!params || !params.enabled) {
-        continue;
-      }
 
       const movingAverageZScore = this.calculateMovingAverageZScore(
         tradingSymbol,
@@ -195,7 +202,8 @@ export class SignalGeneratorService {
     symbol: string,
     requiredPeriod: number,
     allRatings: RatingInput[],
-    statistics: CrossCoinStatistics
+    statistics: CrossCoinStatistics,
+    baseAsset?: string 
   ): void {
     const currentHistory = this.getZScoreHistoryLength(symbol);
 
@@ -203,12 +211,15 @@ export class SignalGeneratorService {
       return;
     }
 
-    const symbolRating = allRatings.find(r => `${r.symbol}USDT` === symbol);
+    // Attempt to determine base asset if not provided
+    // This is a fallback; caller should preferably provide baseAsset
+    const derivedBaseAsset = baseAsset || symbol.replace('USDT', '');
+
+    const symbolRating = allRatings.find(r => r.symbol === derivedBaseAsset);
     if (!symbolRating) {
       return;
     }
 
-    const baseSymbol = symbol.replace('USDT', '');
     const zScore = this.calculateZScore(
       symbolRating.rating,
       statistics.meanRating,

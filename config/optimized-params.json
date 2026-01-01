@@ -1,0 +1,578 @@
+{
+  "AAVE/BTC": {
+    "zScoreThreshold": 4.5,
+    "movingAverages": 4,
+    "profitPercent": 15,
+    "stopLossPercent": 1,
+    "expectedAlpha": 65.8281,
+    "maxDrawdown": 25.9685,
+    "profitFactor": 1.5123
+  },
+  "AAVE/ETH": {
+    "zScoreThreshold": 4.4,
+    "movingAverages": 10,
+    "profitPercent": 10,
+    "stopLossPercent": 2,
+    "expectedAlpha": 41.2902,
+    "maxDrawdown": 13.1435,
+    "profitFactor": 2.4791
+  },
+  "AAVE/USDT": {
+    "zScoreThreshold": 2.3,
+    "movingAverages": 16,
+    "profitPercent": 4.5,
+    "stopLossPercent": 3,
+    "expectedAlpha": 123.3414,
+    "maxDrawdown": 22.6688,
+    "profitFactor": 1.279
+  },
+  "ADA/BNB": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 18,
+    "profitPercent": 13.5,
+    "stopLossPercent": 3,
+    "expectedAlpha": 69.8242,
+    "maxDrawdown": 20.1372,
+    "profitFactor": 1.2989
+  },
+  "ADA/BTC": {
+    "zScoreThreshold": 4.2,
+    "movingAverages": 18,
+    "profitPercent": 2,
+    "stopLossPercent": 2,
+    "expectedAlpha": 51.2735,
+    "maxDrawdown": 7.4317,
+    "profitFactor": 1.323
+  },
+  "ADA/ETH": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 3.5,
+    "expectedAlpha": 36.6416,
+    "maxDrawdown": 26.1818,
+    "profitFactor": 1.315
+  },
+  "ADA/USDT": {
+    "zScoreThreshold": 3.8,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 105.3358,
+    "maxDrawdown": 19.1667,
+    "profitFactor": 1.6943
+  },
+  "ATOM/BTC": {
+    "zScoreThreshold": 2.1,
+    "movingAverages": 14,
+    "profitPercent": 10,
+    "stopLossPercent": 1,
+    "expectedAlpha": 1.8074,
+    "maxDrawdown": 22.0922,
+    "profitFactor": 1.273
+  },
+  "ATOM/USDT": {
+    "zScoreThreshold": 4.3,
+    "movingAverages": 6,
+    "profitPercent": 13.5,
+    "stopLossPercent": 6,
+    "expectedAlpha": 53.1207,
+    "maxDrawdown": 22.6544,
+    "profitFactor": 1.5365
+  },
+  "AVAX/BNB": {
+    "zScoreThreshold": 3.3,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 1.5,
+    "expectedAlpha": 138.0441,
+    "maxDrawdown": 11.2553,
+    "profitFactor": 2.7713
+  },
+  "AVAX/BTC": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 18,
+    "profitPercent": 14.5,
+    "stopLossPercent": 2,
+    "expectedAlpha": 81.0043,
+    "maxDrawdown": 15.7033,
+    "profitFactor": 2.9934
+  },
+  "AVAX/ETH": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 16,
+    "profitPercent": 13.5,
+    "stopLossPercent": 2,
+    "expectedAlpha": 64.683,
+    "maxDrawdown": 13.6406,
+    "profitFactor": 3.2343
+  },
+  "AVAX/USDT": {
+    "zScoreThreshold": 1.7,
+    "movingAverages": 18,
+    "profitPercent": 13.5,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 146.1046,
+    "maxDrawdown": 23.3278,
+    "profitFactor": 1.3193
+  },
+  "BCH/BNB": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 20,
+    "profitPercent": 13,
+    "stopLossPercent": 1.5,
+    "expectedAlpha": 46.1511,
+    "maxDrawdown": 13.0584,
+    "profitFactor": 1.7094
+  },
+  "BCH/BTC": {
+    "zScoreThreshold": 3.3,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 58.0761,
+    "maxDrawdown": 20.2257,
+    "profitFactor": 1.4826
+  },
+  "BCH/USDT": {
+    "zScoreThreshold": 3.8,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 31.2222,
+    "maxDrawdown": 24.9243,
+    "profitFactor": 1.3308
+  },
+  "BNB/BTC": {
+    "zScoreThreshold": 4.2,
+    "movingAverages": 16,
+    "profitPercent": 7.5,
+    "stopLossPercent": 1,
+    "expectedAlpha": 80.7288,
+    "maxDrawdown": 11.0119,
+    "profitFactor": 1.8075
+  },
+  "BNB/ETH": {
+    "zScoreThreshold": 3.3,
+    "movingAverages": 18,
+    "profitPercent": 12.5,
+    "stopLossPercent": 2,
+    "expectedAlpha": 31.5094,
+    "maxDrawdown": 16.7672,
+    "profitFactor": 2.3624
+  },
+  "BNB/USDT": {
+    "zScoreThreshold": 3.7,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 89.686,
+    "maxDrawdown": 14.5768,
+    "profitFactor": 2.9236
+  },
+  "BTC/USDT": {
+    "zScoreThreshold": 3.6,
+    "movingAverages": 18,
+    "profitPercent": 12.5,
+    "stopLossPercent": 1.5,
+    "expectedAlpha": 51.5211,
+    "maxDrawdown": 13.9402,
+    "profitFactor": 2.1253
+  },
+  "DOGE/BTC": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 16,
+    "profitPercent": 13,
+    "stopLossPercent": 3,
+    "expectedAlpha": 32.6389,
+    "maxDrawdown": 23.5865,
+    "profitFactor": 1.2225
+  },
+  "DOGE/USDT": {
+    "zScoreThreshold": 4.3,
+    "movingAverages": 16,
+    "profitPercent": 11.5,
+    "stopLossPercent": 8.5,
+    "expectedAlpha": 48.622,
+    "maxDrawdown": 18.6014,
+    "profitFactor": 1.9441
+  },
+  "DOT/BNB": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 14,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 88.6519,
+    "maxDrawdown": 13.6956,
+    "profitFactor": 1.883
+  },
+  "DOT/BTC": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 1,
+    "expectedAlpha": 66.0325,
+    "maxDrawdown": 11.9603,
+    "profitFactor": 1.2448
+  },
+  "DOT/ETH": {
+    "zScoreThreshold": 3.8,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 39.4219,
+    "maxDrawdown": 15.0959,
+    "profitFactor": 1.272
+  },
+  "DOT/USDT": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 16,
+    "profitPercent": 13.5,
+    "stopLossPercent": 2,
+    "expectedAlpha": 110.7759,
+    "maxDrawdown": 14.476,
+    "profitFactor": 3.5673
+  },
+  "ETC/BNB": {
+    "zScoreThreshold": 3.8,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 1.5,
+    "expectedAlpha": 83.255,
+    "maxDrawdown": 12.3562,
+    "profitFactor": 2.3077
+  },
+  "ETC/BTC": {
+    "zScoreThreshold": 3.6,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 1,
+    "expectedAlpha": 38.1685,
+    "maxDrawdown": 12.4229,
+    "profitFactor": 1.1439
+  },
+  "ETC/ETH": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 20,
+    "profitPercent": 13,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 34.0528,
+    "maxDrawdown": 22.1914,
+    "profitFactor": 1.3467
+  },
+  "ETC/USDT": {
+    "zScoreThreshold": 3.6,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 3,
+    "expectedAlpha": 33.5993,
+    "maxDrawdown": 23.5302,
+    "profitFactor": 1.9729
+  },
+  "ETH/BTC": {
+    "zScoreThreshold": 3.6,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 1,
+    "expectedAlpha": 45.5958,
+    "maxDrawdown": 10.0245,
+    "profitFactor": 2.6719
+  },
+  "ETH/USDT": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 18,
+    "profitPercent": 14.5,
+    "stopLossPercent": 2,
+    "expectedAlpha": 142.4045,
+    "maxDrawdown": 16.8669,
+    "profitFactor": 2.3028
+  },
+  "HBAR/BNB": {
+    "zScoreThreshold": 4.2,
+    "movingAverages": 20,
+    "profitPercent": 9,
+    "stopLossPercent": 4,
+    "expectedAlpha": 62.3092,
+    "maxDrawdown": 16.5363,
+    "profitFactor": 1.9654
+  },
+  "HBAR/BTC": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 3.5,
+    "expectedAlpha": 60.8244,
+    "maxDrawdown": 22.2914,
+    "profitFactor": 1.276
+  },
+  "HBAR/USDT": {
+    "zScoreThreshold": 3.2,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 57.6474,
+    "maxDrawdown": 15.8486,
+    "profitFactor": 2.3986
+  },
+  "LINK/BNB": {
+    "zScoreThreshold": 3.4,
+    "movingAverages": 18,
+    "profitPercent": 13.5,
+    "stopLossPercent": 1.5,
+    "expectedAlpha": 105.6872,
+    "maxDrawdown": 14.1547,
+    "profitFactor": 2.8233
+  },
+  "LINK/BTC": {
+    "zScoreThreshold": 3.4,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 3,
+    "expectedAlpha": 76.4335,
+    "maxDrawdown": 19.9529,
+    "profitFactor": 2.3823
+  },
+  "LINK/ETH": {
+    "zScoreThreshold": 3.4,
+    "movingAverages": 20,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 78.8625,
+    "maxDrawdown": 18.2002,
+    "profitFactor": 2.041
+  },
+  "LINK/USDT": {
+    "zScoreThreshold": 1.5,
+    "movingAverages": 14,
+    "profitPercent": 12,
+    "stopLossPercent": 1,
+    "expectedAlpha": 130.0945,
+    "maxDrawdown": 21.7384,
+    "profitFactor": 1.2767
+  },
+  "LTC/BNB": {
+    "zScoreThreshold": 3.6,
+    "movingAverages": 18,
+    "profitPercent": 13.5,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 63.4372,
+    "maxDrawdown": 19.6249,
+    "profitFactor": 3.5869
+  },
+  "LTC/BTC": {
+    "zScoreThreshold": 3.8,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 61.796,
+    "maxDrawdown": 20.7549,
+    "profitFactor": 1.8412
+  },
+  "LTC/ETH": {
+    "zScoreThreshold": 3.6,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 1,
+    "expectedAlpha": 59.9227,
+    "maxDrawdown": 10.8261,
+    "profitFactor": 1.4268
+  },
+  "LTC/USDT": {
+    "zScoreThreshold": 3.8,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 86.6872,
+    "maxDrawdown": 25.4962,
+    "profitFactor": 1.7597
+  },
+  "NEAR/BNB": {
+    "zScoreThreshold": 3.4,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 3,
+    "expectedAlpha": 109.9699,
+    "maxDrawdown": 16.9256,
+    "profitFactor": 2.6387
+  },
+  "NEAR/BTC": {
+    "zScoreThreshold": 3.6,
+    "movingAverages": 14,
+    "profitPercent": 11.5,
+    "stopLossPercent": 4.5,
+    "expectedAlpha": 30.6897,
+    "maxDrawdown": 14.032,
+    "profitFactor": 2.1244
+  },
+  "NEAR/USDT": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 20,
+    "profitPercent": 13.5,
+    "stopLossPercent": 2,
+    "expectedAlpha": 137.8041,
+    "maxDrawdown": 22.4982,
+    "profitFactor": 1.8435
+  },
+  "SOL/BNB": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 20,
+    "profitPercent": 13.5,
+    "stopLossPercent": 2,
+    "expectedAlpha": 44.4929,
+    "maxDrawdown": 12.0232,
+    "profitFactor": 2.6081
+  },
+  "SOL/BTC": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 18,
+    "profitPercent": 14,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 95.3826,
+    "maxDrawdown": 16.2534,
+    "profitFactor": 1.4472
+  },
+  "SOL/ETH": {
+    "zScoreThreshold": 3.9,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 79.916,
+    "maxDrawdown": 21.8685,
+    "profitFactor": 1.2069
+  },
+  "SOL/USDT": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 3.5,
+    "expectedAlpha": 180.2081,
+    "maxDrawdown": 15.8463,
+    "profitFactor": 2.039
+  },
+  "TRX/BNB": {
+    "zScoreThreshold": 3.8,
+    "movingAverages": 20,
+    "profitPercent": 3.5,
+    "stopLossPercent": 1.5,
+    "expectedAlpha": 44.6925,
+    "maxDrawdown": 7.5818,
+    "profitFactor": 1.2199
+  },
+  "TRX/BTC": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 20,
+    "profitPercent": 13,
+    "stopLossPercent": 2.5,
+    "expectedAlpha": 42.5421,
+    "maxDrawdown": 14.146,
+    "profitFactor": 1.7409
+  },
+  "TRX/ETH": {
+    "zScoreThreshold": 3.6,
+    "movingAverages": 20,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 55.1401,
+    "maxDrawdown": 12.9762,
+    "profitFactor": 3.0614
+  },
+  "TRX/USDT": {
+    "zScoreThreshold": 3.6,
+    "movingAverages": 18,
+    "profitPercent": 13.5,
+    "stopLossPercent": 1.5,
+    "expectedAlpha": 83.8798,
+    "maxDrawdown": 16.4598,
+    "profitFactor": 2.24
+  },
+  "VET/BNB": {
+    "zScoreThreshold": 3.1,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 88.2043,
+    "maxDrawdown": 27.715,
+    "profitFactor": 1.5437
+  },
+  "VET/BTC": {
+    "zScoreThreshold": 4.5,
+    "movingAverages": 10,
+    "profitPercent": 4,
+    "stopLossPercent": 5,
+    "expectedAlpha": 32.8007,
+    "maxDrawdown": 17.6781,
+    "profitFactor": 1.2669
+  },
+  "VET/ETH": {
+    "zScoreThreshold": 3.1,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 77.6732,
+    "maxDrawdown": 16.3858,
+    "profitFactor": 1.8019
+  },
+  "VET/USDT": {
+    "zScoreThreshold": 3.1,
+    "movingAverages": 18,
+    "profitPercent": 13,
+    "stopLossPercent": 2,
+    "expectedAlpha": 157.3049,
+    "maxDrawdown": 27.696,
+    "profitFactor": 1.8528
+  },
+  "XLM/BTC": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 20,
+    "profitPercent": 13,
+    "stopLossPercent": 1.5,
+    "expectedAlpha": 30.2718,
+    "maxDrawdown": 14.6036,
+    "profitFactor": 1.5358
+  },
+  "XLM/ETH": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 18,
+    "profitPercent": 11.5,
+    "stopLossPercent": 2,
+    "expectedAlpha": 58.0001,
+    "maxDrawdown": 15.8801,
+    "profitFactor": 2.1198
+  },
+  "XLM/USDT": {
+    "zScoreThreshold": 3.5,
+    "movingAverages": 16,
+    "profitPercent": 12.5,
+    "stopLossPercent": 2,
+    "expectedAlpha": 111.6081,
+    "maxDrawdown": 19.0078,
+    "profitFactor": 1.6745
+  },
+  "XRP/BNB": {
+    "zScoreThreshold": 4.5,
+    "movingAverages": 18,
+    "profitPercent": 14.5,
+    "stopLossPercent": 7.5,
+    "expectedAlpha": 12.1714,
+    "maxDrawdown": 25.2296,
+    "profitFactor": 1.2589
+  },
+  "XRP/BTC": {
+    "zScoreThreshold": 3.3,
+    "movingAverages": 12,
+    "profitPercent": 13,
+    "stopLossPercent": 1,
+    "expectedAlpha": 47.848,
+    "maxDrawdown": 20.8386,
+    "profitFactor": 1.3273
+  },
+  "XRP/USDT": {
+    "zScoreThreshold": 4.1,
+    "movingAverages": 18,
+    "profitPercent": 7.5,
+    "stopLossPercent": 6.5,
+    "expectedAlpha": 67.62,
+    "maxDrawdown": 17.8928,
+    "profitFactor": 1.3047
+  }
+}

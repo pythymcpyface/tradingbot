@@ -438,7 +438,9 @@ class WalkForwardTester {
  * Parse command line arguments
  */
 function parseArguments(): Omit<WalkForwardConfig, 'startTime'> & { startTimeStr?: string } {
-  const args = process.argv.slice(2);
+  // Filter out flags from arguments
+  const allArgs = process.argv.slice(2);
+  const args = allArgs.filter(arg => !arg.startsWith('--'));
 
   if (args.length !== 7 && args.length !== 8) {
     console.error('❌ Invalid arguments. Usage:');

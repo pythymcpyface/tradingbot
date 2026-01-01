@@ -135,16 +135,21 @@ export class TradingEngine extends EventEmitter {
         await this.logger.info('ENGINE', 'Allocation manager initialized');
       }
 
-      // Start price streaming for all BASE_COINS (monitoring) but only trade parameter set symbols
-      const baseCoins = (process.env.BASE_COINS?.split(',').map(coin => coin.trim()) || [])
-        .filter(coin => coin !== 'USDT');
-      const allMonitoringSymbols = baseCoins.map(coin => `${coin}USDT`);
+      // Start price streaming for all active trading pairs
+      const tradingSymbols = Array.from(this.state.parameterSets.keys());
+      const activePositionSymbols = Array.from(this.state.activePositions.keys());
       
-      await this.binanceService.startPriceStreaming(allMonitoringSymbols);
-      await this.logger.info('ENGINE', 'Price streaming started for all BASE_COINS', { 
-        monitoringSymbols: allMonitoringSymbols,
-        tradingSymbols: this.config.symbols 
-      });
+      // Combine and deduplicate symbols
+      const allMonitoringSymbols = [...new Set([...tradingSymbols, ...activePositionSymbols])];
+      
+      if (allMonitoringSymbols.length > 0) {
+        await this.binanceService.startPriceStreaming(allMonitoringSymbols);
+        await this.logger.info('ENGINE', 'Price streaming started for trading pairs', { 
+          symbols: allMonitoringSymbols 
+        });
+      } else {
+        await this.logger.warn('ENGINE', 'No symbols to monitor for price streaming');
+      }
 
       // Start monitoring loop
       this.startMonitoring();
@@ -250,11 +255,10 @@ export class TradingEngine extends EventEmitter {
       const monitoringSymbolData: any[] = [];
 
       for (const [symbol, zScoreData] of result.zScores) {
-        const baseSymbol = symbol.replace('USDT', '');
-        const rating = ratingInputs.find(r => `${r.symbol}USDT` === symbol);
+        const params = this.getParametersForSymbol(symbol);
+        const rating = ratingInputs.find(r => r.symbol === params.baseAsset);
 
         if (rating && zScoreData.movingAverage !== null) {
-          const params = this.getParametersForSymbol(symbol);
           const isEnabledForTrading = this.state.parameterSets.has(symbol);
 
           // Emit z-score data for database storage
@@ -341,8 +345,8 @@ export class TradingEngine extends EventEmitter {
 
       // Enhance signals with additional data from ratings
       for (const signal of signals) {
-        const baseSymbol = signal.symbol.replace('USDT', '');
-        const matchingRatings = ratings.filter(r => r.symbol === baseSymbol);
+        const params = this.getParametersForSymbol(signal.symbol);
+        const matchingRatings = ratings.filter(r => r.symbol === params.baseAsset);
         if (matchingRatings.length > 0) {
           const latestRating = matchingRatings[matchingRatings.length - 1];
           signal.currentRating = parseFloat(latestRating.rating.toString());

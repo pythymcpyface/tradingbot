@@ -21,6 +21,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
+import { TradingPairsGenerator } from '../src/utils/TradingPairsGenerator';
 
 config();
 
@@ -487,10 +488,6 @@ class ParameterOptimizer {
     }
     console.log('================================================================================');
   }
-
-import { TradingPairsGenerator } from '../src/utils/TradingPairsGenerator';
-
-// ... (existing code)
 
   async run() {
     await this.initialize();

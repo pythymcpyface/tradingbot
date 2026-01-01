@@ -67,9 +67,34 @@ export class ParameterSetManager {
         return data.map(this.validateParameterSet);
       } else if (data.parameterSets && Array.isArray(data.parameterSets)) {
         return data.parameterSets.map(this.validateParameterSet);
-      } else {
-        throw new Error('Invalid file format. Expected array of parameter sets or object with parameterSets property.');
+      } else if (typeof data === 'object' && data !== null) {
+        // Handle Map format: { "SYMBOL": { ...params } }
+        const paramSets: TradingParameterSet[] = [];
+        
+        for (const [symbol, params] of Object.entries(data)) {
+          const p = params as any;
+          
+          // Inject symbol if missing
+          if (!p.symbol) p.symbol = symbol;
+          
+          // Try to derive base/quote if missing
+          if ((!p.baseAsset || !p.quoteAsset) && symbol.includes('/')) {
+            const [base, quote] = symbol.split('/');
+            if (!p.baseAsset) p.baseAsset = base;
+            if (!p.quoteAsset) p.quoteAsset = quote;
+          } else if ((!p.baseAsset || !p.quoteAsset) && symbol.endsWith('USDT')) {
+             if (!p.baseAsset) p.baseAsset = symbol.replace('USDT', '');
+             if (!p.quoteAsset) p.quoteAsset = 'USDT';
+          }
+
+          paramSets.push(this.validateParameterSet(p));
+        }
+        
+        if (paramSets.length > 0) return paramSets;
       }
+      
+      throw new Error('Invalid file format. Expected array of parameter sets or object map.');
+      
     } catch (error) {
       console.error(`Failed to load parameters from file ${filePath}:`, error);
       throw error;
