@@ -40,10 +40,17 @@ jobs:
 
     - name: Deploy to Lightsail
       uses: appleboy/ssh-action@master
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ env.AWS_REGION }}
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
       with:
         host: ${{ secrets.LIGHTSAIL_INSTANCE_IP }}
         username: ${{ env.LIGHTSAIL_USERNAME }}
         key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+        envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,ECR_REGISTRY,ECR_REPOSITORY
         script: |
           # Ensure dependencies
           if ! command -v jq &> /dev/null; then
@@ -54,21 +61,23 @@ jobs:
               sudo apt-get update && sudo apt-get install -y awscli
           fi
 
+          # Configure AWS CLI for this session (using env vars passed from GitHub)
+          export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+          export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+          export AWS_DEFAULT_REGION=$AWS_REGION
+
           # Login to ECR inside Lightsail
-          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
           
           # Pull latest image
-          docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
           
           # Stop and remove existing container
           docker stop trading-engine || true
           docker rm trading-engine || true
           
           # Fetch secrets from Secrets Manager
-          # Note: The instance needs permissions to access Secrets Manager. 
-          # Either via attached IAM role (preferred) or configured credentials.
-          # Here we assume the instance has permissions via its IAM role or previously configured credentials.
-          SECRET_JSON=$(aws secretsmanager get-secret-value --region ${{ env.AWS_REGION }} --secret-id tradingbot/binance-keys --query SecretString --output text)
+          SECRET_JSON=$(aws secretsmanager get-secret-value --region $AWS_REGION --secret-id tradingbot/binance-keys --query SecretString --output text)
           API_KEY=$(echo $SECRET_JSON | jq -r .BINANCE_API_KEY)
           API_SECRET=$(echo $SECRET_JSON | jq -r .BINANCE_API_SECRET)
           
@@ -83,4 +92,4 @@ jobs:
             -e BINANCE_API_SECRET=$API_SECRET \
             -e NODE_ENV=production \
             -e DATABASE_URL="file:/data/orders.db" \
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+            $ECR_REGISTRY/$ECR_REPOSITORY:latest
