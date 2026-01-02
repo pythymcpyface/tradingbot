@@ -23,7 +23,12 @@ if ! command -v docker &> /dev/null; then
       $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
     sudo apt-get update
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+    # Try installing with fix-missing to handle transient network issues
+    sudo apt-get install -y --fix-missing docker-ce docker-ce-cli containerd.io || {
+        echo "Install failed, retrying update and install..."
+        sudo apt-get update
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+    }
 else
     echo "Docker already installed."
 fi
