@@ -32,8 +32,8 @@ WORKDIR /app
 COPY prisma/schema.sqlite.prisma ./prisma/schema.prisma
 RUN npx prisma generate
 
-# Create build config to include scripts
-RUN echo '{"extends": "./tsconfig.json", "include": ["src/**/*", "scripts/**/*"]}' > tsconfig.build.json
+# Create build config to include only trading engine files
+RUN echo '{"extends": "./tsconfig.json", "compilerOptions": {"rootDir": "."}, "include": ["src/node-api/services/**/*", "src/services/AllocationManager.ts", "src/services/SignalGeneratorService.ts", "src/services/OCOOrderService.ts", "src/services/GlickoEngine.ts", "src/services/Logger.ts", "src/utils/TradingPairsGenerator.ts", "src/utils/math.ts", "src/types/**/*", "scripts/startLiveTrading.ts"], "exclude": ["src/node-api/services/DataCacheService.ts"]}' > tsconfig.build.json
 
 # Compile TypeScript
 RUN npx tsc -p tsconfig.build.json
