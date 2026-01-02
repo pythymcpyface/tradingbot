@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { PrismaClient } from '@prisma/client';
 import BinanceService from './BinanceService';
 import { RustCoreService } from './RustCoreService';
 import { ZScoreSignal, TradingParameterSet, ActivePosition, PaperPosition } from '../../types';
@@ -55,6 +56,7 @@ export class TradingEngine extends EventEmitter {
   private signalGenerator: SignalGeneratorService;
   private ocoOrderService: OCOOrderService;
   private glickoEngine: GlickoEngine;
+  private prisma: PrismaClient;
 
   constructor(
     binanceService: BinanceService,
@@ -70,6 +72,7 @@ export class TradingEngine extends EventEmitter {
     this.signalGenerator = new SignalGeneratorService();
     this.ocoOrderService = new OCOOrderService();
     this.glickoEngine = new GlickoEngine();
+    this.prisma = new PrismaClient();
     
     this.state = {
       isRunning: false,
@@ -84,6 +87,38 @@ export class TradingEngine extends EventEmitter {
     };
 
     this.setupEventListeners();
+  }
+
+  private async saveOrder(order: any): Promise<void> {
+    try {
+      if (!this.config.enableLiveTrading) return;
+
+      await this.prisma.productionOrders.create({
+        data: {
+          orderId: order.orderId.toString(),
+          symbol: order.symbol,
+          side: order.side,
+          type: order.type,
+          quantity: order.origQty || order.quantity || 0,
+          price: order.price || 0,
+          stopPrice: order.stopPrice || null,
+          timeInForce: order.timeInForce || 'GTC',
+          status: order.status,
+          executedQty: order.executedQty || 0,
+          cummulativeQuoteQty: order.cummulativeQuoteQty || 0,
+          time: new Date(order.transactTime || order.time || Date.now()),
+          updateTime: new Date(order.updateTime || order.transactTime || Date.now()),
+          isWorking: order.isWorking !== undefined ? order.isWorking : true,
+          origQuoteOrderQty: order.origQuoteOrderQty || 0
+        }
+      });
+      console.log(`💾 Saved order ${order.orderId} to database`);
+    } catch (error) {
+      // Ignore unique constraint violations (order already exists)
+      if ((error as any).code !== 'P2002') {
+        console.error('Failed to save order to database:', error);
+      }
+    }
   }
 
   private setupEventListeners(): void {
@@ -1004,6 +1039,9 @@ export class TradingEngine extends EventEmitter {
         
         // Update reservation with order ID
         this.allocationManager.updateReservation(signal.symbol, buyOrder.orderId.toString());
+
+        // Save buy order to database
+        await this.saveOrder(buyOrder);
         
         // Step 2: Immediately place OCO sell order with the executed quantity
         const executedQuantity = parseFloat(buyOrder.executedQty);
@@ -1022,6 +1060,16 @@ export class TradingEngine extends EventEmitter {
           stopLossPrice,
           stopLimitPrice
         );
+
+        // Save OCO orders to database
+        const reportOrders = ocoOrder.orderReports || ocoOrder.orders;
+        if (reportOrders) {
+          for (const order of reportOrders) {
+            // Ensure symbol is present
+            if (!order.symbol) order.symbol = signal.symbol;
+            await this.saveOrder(order);
+          }
+        }
         
         console.log(`🎯 OCO ORDER PLACED for ${signal.symbol}:`);
         console.log(`   OCO Order ID: ${ocoOrder.orderListId}`);

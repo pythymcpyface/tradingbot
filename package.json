@@ -20,7 +20,6 @@
     "db:migrate:production": "npx ts-node scripts/migrate-production-database.ts",
     "db:calculate-ratings": "npx ts-node scripts/calculate-initial-ratings.ts",
     "db:reset": "npx prisma migrate reset && npm run db:migrate && npm run db:calculate-ratings",
-    "heroku-postbuild": "npm run build",
     "prisma:generate": "npx prisma generate",
     "prisma:studio": "npx prisma studio",
     "docker:up": "docker-compose up -d",

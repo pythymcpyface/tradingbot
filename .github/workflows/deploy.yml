@@ -1,0 +1,86 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY: trading-bot
+  LIGHTSAIL_USERNAME: ubuntu
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile.trading .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Deploy to Lightsail
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.LIGHTSAIL_INSTANCE_IP }}
+        username: ${{ env.LIGHTSAIL_USERNAME }}
+        key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+        script: |
+          # Ensure dependencies
+          if ! command -v jq &> /dev/null;
+              sudo apt-get update && sudo apt-get install -y jq
+          fi
+
+          if ! command -v aws &> /dev/null;
+              sudo apt-get update && sudo apt-get install -y awscli
+          fi
+
+          # Login to ECR inside Lightsail
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+          
+          # Pull latest image
+          docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          
+          # Stop and remove existing container
+          docker stop trading-engine || true
+          docker rm trading-engine || true
+          
+          # Fetch secrets from Secrets Manager
+          # Note: The instance needs permissions to access Secrets Manager. 
+          # Either via attached IAM role (preferred) or configured credentials.
+          # Here we assume the instance has permissions via its IAM role or previously configured credentials.
+          SECRET_JSON=$(aws secretsmanager get-secret-value --region ${{ env.AWS_REGION }} --secret-id tradingbot/binance-keys --query SecretString --output text)
+          API_KEY=$(echo $SECRET_JSON | jq -r .BINANCE_API_KEY)
+          API_SECRET=$(echo $SECRET_JSON | jq -r .BINANCE_API_SECRET)
+          
+          # Ensure data directory exists
+          mkdir -p /home/ubuntu/data
+
+          # Run container
+          docker run -d --name trading-engine \
+            --restart always \
+            -v /home/ubuntu/data:/data \
+            -e BINANCE_API_KEY=$API_KEY \
+            -e BINANCE_API_SECRET=$API_SECRET \
+            -e NODE_ENV=production \
+            -e DATABASE_URL="file:/data/orders.db" \
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest

@@ -12,14 +12,10 @@ import TradingEngine, { TradingConfig } from '../src/node-api/services/TradingEn
 import BinanceService from '../src/node-api/services/BinanceService';
 import { RustCoreService } from '../src/node-api/services/RustCoreService';
 import { TradingParameterSet } from '../src/types';
-import { PrismaClient } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
 
 config();
-
-// Initialize Prisma client for z-score storage
-const prisma = new PrismaClient();
 
 interface LiveParamsFile {
   parameterSets: TradingParameterSet[];
@@ -44,62 +40,6 @@ function writeStatusFile(status: 'running' | 'stopped', parameterSets: TradingPa
     fs.writeFileSync(statusFile, JSON.stringify(statusData, null, 2));
   } catch (error) {
     console.warn('⚠️ Failed to write status file:', (error as Error).message);
-  }
-}
-
-/**
- * Store z-score data to database
- */
-async function storeZScoreData(
-  symbol: string, 
-  timestamp: Date,
-  zScore: number, 
-  rating: number, 
-  movingAverageZScore: number | undefined,
-  zScoreThreshold: number,
-  movingAveragesPeriod: number,
-  isEnabledForTrading: boolean
-) {
-  try {
-    // Validate numeric values - skip if essential values are invalid
-    if (isNaN(rating) || !isFinite(rating)) {
-      console.warn(`⚠️  Skipping z-score data for ${symbol}: invalid rating (${rating})`);
-      return;
-    }
-    
-    if (isNaN(zScore) || !isFinite(zScore)) {
-      console.warn(`⚠️  Skipping z-score data for ${symbol}: invalid zScore (${zScore})`);
-      return;
-    }
-
-    await prisma.zScoreHistory.upsert({
-      where: {
-        symbol_timestamp: {
-          symbol,
-          timestamp
-        }
-      },
-      update: {
-        zScore,
-        rating,
-        movingAverageZScore: isNaN(movingAverageZScore!) ? null : movingAverageZScore,
-        zScoreThreshold,
-        movingAveragesPeriod,
-        isEnabledForTrading
-      },
-      create: {
-        symbol,
-        timestamp,
-        zScore,
-        rating,
-        movingAverageZScore: isNaN(movingAverageZScore!) ? null : movingAverageZScore,
-        zScoreThreshold,
-        movingAveragesPeriod,
-        isEnabledForTrading
-      }
-    });
-  } catch (error) {
-    console.error(`❌ Failed to store z-score data for ${symbol}:`, error);
   }
 }
 
@@ -237,20 +177,6 @@ function setupEventListeners(tradingEngine: TradingEngine): void {
   tradingEngine.on('tradingError', (error) => {
     console.error(`❌ Trading error:`, error.message);
   });
-  
-  // Store z-score data to database
-  tradingEngine.on('zScoreCalculated', async (data) => {
-    await storeZScoreData(
-      data.symbol,
-      data.timestamp,
-      data.zScore,
-      data.rating,
-      data.movingAverageZScore,
-      data.zScoreThreshold,
-      data.movingAveragesPeriod,
-      data.isEnabledForTrading
-    );
-  });
 }
 
 /**
@@ -271,9 +197,6 @@ function setupShutdownHandlers(tradingEngine: TradingEngine): void {
       
       // Write stopped status
       writeStatusFile('stopped', [], false);
-      
-      // Disconnect from database
-      await prisma.$disconnect();
       
       console.log('✅ Shutdown completed successfully');
       process.exit(0);

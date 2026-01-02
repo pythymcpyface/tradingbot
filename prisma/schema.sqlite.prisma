@@ -1,0 +1,34 @@
+// prisma/schema.sqlite.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:/data/orders.db"
+}
+
+model ProductionOrders {
+  id                   String   @id @default(cuid())
+  orderId              String   @unique
+  symbol               String
+  side                 String
+  type                 String
+  quantity             Decimal
+  price                Decimal
+  stopPrice            Decimal?
+  timeInForce          String
+  status               String
+  executedQty          Decimal
+  cummulativeQuoteQty  Decimal
+  time                 DateTime
+  updateTime           DateTime
+  isWorking            Boolean
+  origQuoteOrderQty    Decimal
+  createdAt            DateTime @default(now())
+
+  @@index([symbol, time])
+  @@index([status])
+  @@map("production_orders")
+}

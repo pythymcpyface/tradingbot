@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 import { 
   BacktestConfig, 
   BacktestResult, 
@@ -24,6 +25,13 @@ export class RustCoreService {
 
   async initialize(): Promise<void> {
     try {
+      // Check if binary already exists
+      if (fs.existsSync(this.rustExecutablePath)) {
+        console.log('Rust binary found, skipping build');
+        this.initialized = true;
+        return;
+      }
+
       // Build Rust core if not already built
       await this.buildRustCore();
       this.initialized = true;

@@ -1,44 +1,70 @@
-# Trading Engine Only Dockerfile - No Web Interface
+# Multi-stage build for Trading Engine
 
-FROM node:18-slim
+# --- Builder Stage ---
+FROM node:18-bullseye AS builder
+
+# Install Rust
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
-
-# Install minimal dependencies
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package*.json ./
 COPY tsconfig.json ./
 
 # Install dependencies
-RUN npm ci && npm cache clean --force
+RUN npm ci
 
-# Copy only what's needed for trading
-COPY src/lib/ ./src/lib/
-COPY src/services/ ./src/services/
-COPY src/node-api/services/ ./src/node-api/services/
-COPY src/types/ ./src/types/
-COPY src/utils/ ./src/utils/
+# Copy source code
+COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY config/ ./config/
+COPY prisma/ ./prisma/
 
-# Copy production schema only
-COPY prisma/schema.production.prisma ./prisma/schema.prisma
+# Build Rust Core
+WORKDIR /app/src/rust-core
+RUN cargo build --release
+WORKDIR /app
 
-# Generate Prisma Client
-RUN npx prisma generate --schema=./prisma/schema.prisma
+# Generate Prisma Client (SQLite)
+# We overwrite schema.prisma with schema.sqlite.prisma
+COPY prisma/schema.sqlite.prisma ./prisma/schema.prisma
+RUN npx prisma generate
 
-# Create non-root user
-RUN groupadd -r tradingbot && useradd -r -g tradingbot -s /bin/false tradingbot
-RUN chown -R tradingbot:tradingbot /app
-USER tradingbot
+# Create build config to include scripts
+RUN echo '{"extends": "./tsconfig.json", "include": ["src/**/*", "scripts/**/*"]}' > tsconfig.build.json
 
-# No port exposure needed - this is a background service
+# Compile TypeScript
+RUN npx tsc -p tsconfig.build.json
 
-# Run trading engine directly
-CMD ["npx", "ts-node", "scripts/startLiveTrading.ts"]
+# --- Production Stage ---
+FROM node:18-slim
+
+WORKDIR /app
+
+# Install openssl for Prisma and sqlite3 for debugging
+RUN apt-get update && apt-get install -y openssl sqlite3 && rm -rf /var/lib/apt/lists/*
+
+# Copy built artifacts
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/config ./config
+
+# Copy Rust binary to expected location in dist structure
+# TradingEngine expects ../../rust-core from its location in dist/node-api/services
+# So we place it in dist/rust-core
+COPY --from=builder /app/src/rust-core/target/release/glicko-core ./dist/rust-core/target/release/glicko-core
+
+# Create data directory for SQLite
+RUN mkdir -p /data
+VOLUME /data
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV DATABASE_URL="file:/data/orders.db"
+
+# CMD to run the compiled script
+CMD ["node", "dist/scripts/startLiveTrading.js"]
