@@ -47,10 +47,23 @@ function writeStatusFile(status: 'running' | 'stopped', parameterSets: TradingPa
  * Load parameter sets from config/live-params.json
  */
 function loadParameterSets(): TradingParameterSet[] {
-  const configPath = path.join(__dirname, '../config/live-params.json');
+  // Try multiple paths to handle both dev (ts-node) and prod (compiled) environments
+  const paths = [
+    path.join(process.cwd(), 'config', 'live-params.json'),
+    path.join(__dirname, '../config/live-params.json'),
+    path.join(__dirname, '../../config/live-params.json')
+  ];
+
+  let configPath = '';
+  for (const p of paths) {
+    if (fs.existsSync(p)) {
+      configPath = p;
+      break;
+    }
+  }
   
-  if (!fs.existsSync(configPath)) {
-    console.error('❌ Config file not found: config/live-params.json');
+  if (!configPath) {
+    console.error(`❌ Config file not found. Checked: ${paths.join(', ')}`);
     process.exit(1);
   }
   
