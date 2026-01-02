@@ -22,6 +22,9 @@ if ! command -v docker &> /dev/null; then
       "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
       $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
+    # Fix any previous broken installs first
+    sudo apt-get --fix-broken install -y
+
     # Clean apt cache to fix 404 errors
     sudo rm -rf /var/lib/apt/lists/*
     sudo apt-get update
