@@ -13,10 +13,13 @@ export class RustCoreService {
   private rustExecutablePath: string;
 
   constructor() {
-    this.rustExecutablePath = path.join(
-      __dirname, 
-      '../../rust-core/target/release/glicko-core'
-    );
+    // In production (Docker), the binary is copied to dist/rust-core
+    // In development, it's in src/rust-core/target
+    if (process.env.NODE_ENV === 'production') {
+      this.rustExecutablePath = path.join(__dirname, '../../rust-core/target/release/glicko-core');
+    } else {
+      this.rustExecutablePath = path.join(__dirname, '../../rust-core/target/release/glicko-core');
+    }
   }
 
   isInitialized(): boolean {
@@ -27,12 +30,18 @@ export class RustCoreService {
     try {
       // Check if binary already exists
       if (fs.existsSync(this.rustExecutablePath)) {
-        console.log('Rust binary found, skipping build');
+        console.log(`Rust binary found at ${this.rustExecutablePath}, skipping build`);
         this.initialized = true;
         return;
       }
 
-      // Build Rust core if not already built
+      if (process.env.NODE_ENV === 'production') {
+        console.warn(`Rust binary not found at ${this.rustExecutablePath} in production. Cannot build.`);
+        this.initialized = true; // Use TS fallback
+        return;
+      }
+
+      // Build Rust core if not already built (only in dev)
       await this.buildRustCore();
       this.initialized = true;
     } catch (error) {
