@@ -22,13 +22,20 @@ if ! command -v docker &> /dev/null; then
       "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
       $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
+    # Clean apt cache to fix 404 errors
+    sudo rm -rf /var/lib/apt/lists/*
     sudo apt-get update
-    # Try installing with fix-missing to handle transient network issues
-    sudo apt-get install -y --fix-missing docker-ce docker-ce-cli containerd.io || {
-        echo "Install failed, retrying update and install..."
-        sudo apt-get update
-        sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+    
+    # Install containerd.io first to verify it works
+    sudo apt-get install -y containerd.io || {
+         echo "Standard install failed, trying to find available versions..."
+         apt-cache madison containerd.io
+         # Fallback to previous known stable version if latest fails
+         sudo apt-get install -y containerd.io=1.6.28-1
     }
+    
+    # Now install the rest
+    sudo apt-get install -y docker-ce docker-ce-cli
 else
     echo "Docker already installed."
 fi
