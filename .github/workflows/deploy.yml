@@ -46,11 +46,11 @@ jobs:
         key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
         script: |
           # Ensure dependencies
-          if ! command -v jq &> /dev/null;
+          if ! command -v jq &> /dev/null; then
               sudo apt-get update && sudo apt-get install -y jq
           fi
 
-          if ! command -v aws &> /dev/null;
+          if ! command -v aws &> /dev/null; then
               sudo apt-get update && sudo apt-get install -y awscli
           fi
 
