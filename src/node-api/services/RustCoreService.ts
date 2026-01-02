@@ -14,9 +14,9 @@ export class RustCoreService {
 
   constructor() {
     // In production (Docker), the binary is copied to dist/rust-core
-    // In development, it's in src/rust-core/target
+    // The compiled JS is in dist/src/node-api/services (due to rootDir: ".")
     if (process.env.NODE_ENV === 'production') {
-      this.rustExecutablePath = path.join(__dirname, '../../rust-core/target/release/glicko-core');
+      this.rustExecutablePath = path.join(__dirname, '../../../rust-core/target/release/glicko-core');
     } else {
       this.rustExecutablePath = path.join(__dirname, '../../rust-core/target/release/glicko-core');
     }

@@ -92,4 +92,5 @@ jobs:
             -e BINANCE_API_SECRET=$API_SECRET \
             -e NODE_ENV=production \
             -e DATABASE_URL="file:/data/orders.db" \
-            $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            -e BASE_COINS="BTC,ETH,BNB,SOL,XRP,ADA,AVAX,DOGE,DOT,TRX,LINK,MATIC,LTC,UNI,ATOM,ETC,XLM,ALGO,BCH,VET" \
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
