@@ -28,7 +28,7 @@ fn main() -> Result<()> {
             io::stdin().read_to_string(&mut input)?;
             
             let klines: Vec<KlineData> = serde_json::from_str(&input)?;
-            let ratings = calculate_glicko_ratings(klines)?;
+            let ratings = calculate_glicko_ratings(klines).map_err(|e| anyhow::anyhow!(e.to_string()))?;
             
             println!("{}", serde_json::to_string(&ratings)?);
         },
@@ -40,7 +40,7 @@ fn main() -> Result<()> {
             let config: BacktestConfig = serde_json::from_value(data["config"].clone())?;
             let ratings: Vec<GlickoRating> = serde_json::from_value(data["ratings"].clone())?;
             
-            let result = run_backtest(config, ratings)?;
+            let result = run_backtest(config, ratings).map_err(|e| anyhow::anyhow!(e.to_string()))?;
             
             println!("{}", serde_json::to_string(&result)?);
         },
@@ -52,7 +52,7 @@ fn main() -> Result<()> {
             let config: BacktestConfig = serde_json::from_value(data["config"].clone())?;
             let ratings: Vec<GlickoRating> = serde_json::from_value(data["ratings"].clone())?;
             
-            let results = run_windowed_backtest(config, ratings)?;
+            let results = run_windowed_backtest(config, ratings).map_err(|e| anyhow::anyhow!(e.to_string()))?;
             
             println!("{}", serde_json::to_string(&results)?);
         },
