@@ -36,6 +36,6 @@ mkdir -p /home/ubuntu/data
 sudo chown -R ubuntu:ubuntu /home/ubuntu/data
 
 # Configure AWS Region
-aws configure set region ap-southeast-1
+aws configure set region eu-west-2
 
 echo "Setup complete! Please log out and back in for docker group changes to take effect."

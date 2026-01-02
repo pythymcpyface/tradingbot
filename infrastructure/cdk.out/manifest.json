@@ -1,0 +1,101 @@
+{
+  "version": "36.0.0",
+  "artifacts": {
+    "TradingBotLightsailStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "TradingBotLightsailStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "TradingBotLightsailStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://669922042336/eu-west-2",
+      "properties": {
+        "templateFile": "TradingBotLightsailStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::669922042336:role/cdk-hnb659fds-deploy-role-669922042336-eu-west-2",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::669922042336:role/cdk-hnb659fds-cfn-exec-role-669922042336-eu-west-2",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-669922042336-eu-west-2/0ab523d66544bc5e2dbdfc2333622949938eb40aa03bfb860313890a0a16ecd4.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "TradingBotLightsailStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::669922042336:role/cdk-hnb659fds-lookup-role-669922042336-eu-west-2",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "TradingBotLightsailStack.assets"
+      ],
+      "metadata": {
+        "/TradingBotLightsailStack/TradingBotRepo/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TradingBotRepo519A260E"
+          }
+        ],
+        "/TradingBotLightsailStack/BinanceKeys/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BinanceKeys66E343EA"
+          }
+        ],
+        "/TradingBotLightsailStack/TradingBotInstance": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TradingBotInstance"
+          }
+        ],
+        "/TradingBotLightsailStack/RepositoryUri": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RepositoryUri"
+          }
+        ],
+        "/TradingBotLightsailStack/InstanceName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "InstanceName"
+          }
+        ],
+        "/TradingBotLightsailStack/SecretArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SecretArn"
+          }
+        ],
+        "/TradingBotLightsailStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/TradingBotLightsailStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/TradingBotLightsailStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "TradingBotLightsailStack"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    }
+  }
+}

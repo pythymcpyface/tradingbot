@@ -1,0 +1,153 @@
+{
+ "Resources": {
+  "TradingBotRepo519A260E": {
+   "Type": "AWS::ECR::Repository",
+   "Properties": {
+    "LifecyclePolicy": {
+     "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
+    },
+    "RepositoryName": "trading-bot"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "TradingBotLightsailStack/TradingBotRepo/Resource"
+   }
+  },
+  "BinanceKeys66E343EA": {
+   "Type": "AWS::SecretsManager::Secret",
+   "Properties": {
+    "Description": "Binance API Key and Secret",
+    "GenerateSecretString": {
+     "GenerateStringKey": "dummy",
+     "SecretStringTemplate": "{\"BINANCE_API_KEY\":\"CHANGE_ME\",\"BINANCE_API_SECRET\":\"CHANGE_ME\"}"
+    },
+    "Name": "tradingbot/binance-keys"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "TradingBotLightsailStack/BinanceKeys/Resource"
+   }
+  },
+  "TradingBotInstance": {
+   "Type": "AWS::Lightsail::Instance",
+   "Properties": {
+    "AvailabilityZone": "eu-west-2a",
+    "BlueprintId": "ubuntu_22_04",
+    "BundleId": "nano_2_0",
+    "InstanceName": "TradingBot-Instance",
+    "KeyPairName": "tradingbot-key"
+   },
+   "Metadata": {
+    "aws:cdk:path": "TradingBotLightsailStack/TradingBotInstance"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/0WMSw6DMAxEz8I+uIQegVVXleAAlRsMDZ8ExU5RFeXuFWXR1cwbPU0N+lpBVeDOpenncrFPSJ2gmRXu/EhkAqSWNs9WfPioZnB/yorJBBJe0eFIAVL348M6W1aLHV/CaBdoBndzLOgM5cO4R9minI/sYzhm53uCiS/vugKtQRcTW1uG6MSuBO2ZX2BZnPC0AAAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "TradingBotLightsailStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "RepositoryUri": {
+   "Description": "ECR Repository URI",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      {
+       "Fn::Select": [
+        4,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "TradingBotRepo519A260E",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".dkr.ecr.",
+      {
+       "Fn::Select": [
+        3,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "TradingBotRepo519A260E",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "TradingBotRepo519A260E"
+      }
+     ]
+    ]
+   }
+  },
+  "InstanceName": {
+   "Description": "Lightsail Instance Name",
+   "Value": "TradingBot-Instance"
+  },
+  "SecretArn": {
+   "Description": "Secret ARN for Binance Keys",
+   "Value": {
+    "Ref": "BinanceKeys66E343EA"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

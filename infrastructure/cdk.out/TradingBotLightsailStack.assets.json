@@ -1,0 +1,20 @@
+{
+  "version": "36.0.0",
+  "files": {
+    "0ab523d66544bc5e2dbdfc2333622949938eb40aa03bfb860313890a0a16ecd4": {
+      "source": {
+        "path": "TradingBotLightsailStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "669922042336-eu-west-2": {
+          "bucketName": "cdk-hnb659fds-assets-669922042336-eu-west-2",
+          "objectKey": "0ab523d66544bc5e2dbdfc2333622949938eb40aa03bfb860313890a0a16ecd4.json",
+          "region": "eu-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::669922042336:role/cdk-hnb659fds-file-publishing-role-669922042336-eu-west-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

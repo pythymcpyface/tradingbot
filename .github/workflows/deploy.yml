@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 env:
-  AWS_REGION: ap-southeast-1
+  AWS_REGION: eu-west-2
   ECR_REPOSITORY: trading-bot
   LIGHTSAIL_USERNAME: ubuntu
 

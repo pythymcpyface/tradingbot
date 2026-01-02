@@ -1,0 +1,29 @@
+{
+    "keyPair": {
+        "name": "tradingbot-key",
+        "arn": "arn:aws:lightsail:eu-west-2:669922042336:KeyPair/dcb0cdb8-283b-47c8-a1ba-a1c99140b8ef",
+        "supportCode": "360025768373/tradingbot-key",
+        "createdAt": "2026-01-02T13:56:43.143000+00:00",
+        "location": {
+            "availabilityZone": "all",
+            "regionName": "eu-west-2"
+        },
+        "resourceType": "KeyPair"
+    },
+    "publicKeyBase64": "ssh-rsa ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdDO7lqLOazv12kbAqIn9vscQ9j6XCfF7HRC9hkUZ0azUkXK3nMo/ppQ7v2hGzLO30BvsqQQCxubGXjx8KGNdPpIGYV1hEZSKuglrwdX6Miizlf/lXoQxlNI8VAuucjezA3wEF7tWD8y2hSIihp9CbYjKGpfiog2AWlPGjPxI9FGUQwazwkO13Bg+vTXGPNLrEnggQy5zs+9d+LohuVg1dE1OkeIdHnBzEVeXoZ86YVzY0dZaB9G028jmyk5ycSLaLT1ESa2aebd9jcZqWdcMiXy+lwCG7AldV4liDfZh+iaEeTFZpCkvaETnN/kliT5dg/APn6fpEcMMZRE8W/P0J ",
+    "privateKeyBase64": "-----BEGIN RSA PRIVATE KEY-----\nMIIEpQIBAAKCAQEA3Qzu5aizms79dpGwKiJ/b7HEPY+lwnxex0QvYZFGdGs1JFyt\n5zKP6aUO79oRsyzt9Ab7KkEAsbmxl48fChjXT6SBmFdYRGUiroJa8HV+jIos5X/5\nV6EMZTSPFQLrnI3swN8BBe7Vg/MtoUiIoafQm2IyhqX4qINgFpTxoz8SPRRlEMGs\n8JDtdwYPr01xjzS6xJ4IEMuc7PvXfi6IblYNXRNTpHiHR5wcxFXl6GfOmFc2NHWW\ngfRtNvI5spOcnEi2i09REmtmnm3fY3GalnXDIl8vpcAhuwJXVeJYg32YfomhHkxW\naQpL2hE5zf5JYk+XYPwD5+n6RHDDGURPFvz9CQIDAQABAoIBAQC/6XSXSunzo3WG\ntWGekyjUjh9z2vzsZxHaKqaALKJgfJs8oIIS0WEEVlsrfcYUKxPD4zO4MYsqwa8f\niBBIsdxstsQUwPBPIQcFPwM49KkT1vq3nW2a2KVsUD9Q3KI13zoHERVQU1RoJH4f\nIlwNDScdYBnBsOK7WqPXtyQ6uI1bHHZ42CtpGgSvOdoI/fY/+AHcC+iTLE5v7Wuo\nY30T2l4peCgyBTWov8mATzHaEcPgjxhkGb4rmXz0+mSwCegkqQGN1RoFT1j4pjQj\n7TFMnOBXzjtC0N6lkNE0M6o0A9V5N9a7Jb3e1ZdqDXd+Rd7tte3ra/KdxCZu1Qxr\n+SeVyfUJAoGBAPZwUDgHYbHFmAfmJFZPppZf1Db3OPkLfCtyB9dbaHOBTVWmWA+d\nE51iM3UkWbft9Irlda/6SjayzcKJSLb5FRbEbSM8TNTg/61rI5lBJ/Cd+Rzhm/Cl\nKcbo3jevO046iQWZJbSNuwd5IAy9P/KFHUFWAz/hbCP9Cxl9S5sWedcDAoGBAOWg\ndVMttgqi51ow14wCb5V12cS41ZdYRXZV/0V7K4CE75XC9sdQBOkZFMMPm9DqkVlz\ny0sw1t7Lz1TkkWHFI5jDY51vRxj4Ztb+cdmWY8iUZ5I+eefKRPv9crWvSu5XMwtu\nRkHyi9y+buNQe7DJ3SX+VFEfwYzfjA3CNVHE/SgDAoGBAJo5k5pc1EDivdBDsP3q\n/wAgnLiBY0BIdb7isBGQfP+8Ld+qKHYtATd/W2C2DQfUfTPngg1Nf+BXafmS3NTV\ncOM8rmhctmCLJrcq0653Xj1xP5NZhbPGSSzYUylaGq1MaK/+NeCWyjNVFD+kuD5Y\nHATlhUcXFgw3shiTlxtJp5ptAoGAZ0fdnXTw7SXKUymmuWWbFKl2MmJER5c/XvNd\nJr44mcyxCjYv0wPtwX4zdWy+05+9knNfm8kyy/D1pyRLM6N82EgBtR0I6HVJpCe7\nw3c+GEiPsRqCsDus/X5IqulWFY+I+Po3hY/3Umkg7QMVLzYMTvtupzJWVutxTfrt\nCoNErksCgYEAubPOcJe9G1ag9c206MEy8WEsfz3FnbFEeIRAr0VchuZeE0qPxlaU\n9ujgvG/lxhSlSmKGWadas7DRE/8W7k3975AKUcK3tu+oyLtaspuQp04ym0vLr1N+\nJH8f4AcCsC8bj/8BkQTnuKhQ6dqPYu4AOG6vrhIiLPC3E5pDBPdH2gk=\n-----END RSA PRIVATE KEY-----",
+    "operation": {
+        "id": "1bb31ab1-353d-4138-b851-4e7c1d0ba258",
+        "resourceName": "tradingbot-key",
+        "resourceType": "KeyPair",
+        "createdAt": "2026-01-02T13:56:43.143000+00:00",
+        "location": {
+            "availabilityZone": "all",
+            "regionName": "eu-west-2"
+        },
+        "isTerminal": true,
+        "operationType": "CreateKeyPair",
+        "status": "Succeeded",
+        "statusChangedAt": "2026-01-02T13:56:43.310000+00:00"
+    }
+}

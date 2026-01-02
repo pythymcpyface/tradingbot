@@ -38,10 +38,10 @@ export class LightsailStack extends cdk.Stack {
     
     const instance = new lightsail.CfnInstance(this, 'TradingBotInstance', {
       instanceName: 'TradingBot-Instance',
-      availabilityZone: 'ap-southeast-1a', // Hardcoded for simplicity based on plan
-      blueprintId: 'ubuntu_20_04',
+      availabilityZone: 'eu-west-2a', // Hardcoded for simplicity based on plan
+      blueprintId: 'ubuntu_22_04',
       bundleId: 'nano_2_0', // 512MB RAM, 1 vCPU
-      keyPairName: 'id_rsa', // Ensure this key exists in Lightsail console!
+      keyPairName: 'tradingbot-key', // Created via CLI
     });
 
     // Outputs
