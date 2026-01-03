@@ -34,6 +34,8 @@ services:
       BINANCE_SECRET_KEY: ${BINANCE_SECRET_KEY}
       TRADING_MODE: ${TRADING_MODE:-LIVE}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Limit Heap to 400MB for 512MB RAM Instance
+      NODE_OPTIONS: "--max-old-space-size=400"
     depends_on:
       postgres:
         condition: service_healthy

@@ -48,7 +48,6 @@ export class TradingEngine extends EventEmitter {
   private lastSignalCheck: Date = new Date(0);
   private failedTradeCooldown: Map<string, Date> = new Map();
   private previousZScores: Map<string, number> = new Map();
-  private zScoreHistory: Map<string, Array<{ timestamp: Date; zScore: number; rating: number }>> = new Map();
   private paperTradingBalance: number = 10000; // Start with $10k virtual balance
   private paperPositions: Map<string, PaperPosition> = new Map();
   private logger: Logger;
