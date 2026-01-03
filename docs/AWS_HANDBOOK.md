@@ -67,3 +67,40 @@ sudo apt update && sudo apt upgrade -y
 ```bash
 docker system prune -f
 ```
+
+## 7. Database & Trading Inspection
+
+### Connecting to the Database
+The database runs in a Docker container. To access it via CLI:
+
+```bash
+ssh -i key.pem ubuntu@3.8.158.154 "docker exec -it tradingbot-db-prod psql -U tradingbot -d tradingbot_glicko"
+```
+
+### Common Queries
+
+**Check Recent Orders:**
+```sql
+SELECT * FROM "ProductionOrders" ORDER BY time DESC LIMIT 10;
+```
+
+**Check Z-Score History:**
+```sql
+SELECT * FROM "ZScoreHistory" ORDER BY timestamp DESC LIMIT 10;
+```
+
+**Check Active Positions (Table):**
+```sql
+SELECT * FROM "ActivePositions";
+```
+
+### Checking Trading Logs
+To grep for specific events like trades or errors:
+
+```bash
+# Check for executed trades
+ssh -i key.pem ubuntu@3.8.158.154 "docker logs tradingbot-engine 2>&1 | grep 'Order executed'"
+
+# Check for errors
+ssh -i key.pem ubuntu@3.8.158.154 "docker logs tradingbot-engine 2>&1 | grep 'Error'"
+```
